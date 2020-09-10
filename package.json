@@ -1,0 +1,34 @@
+{
+  "name": "datdot-ui",
+  "version": "0.0.0",
+  "description": "example ui components",
+  "main": "src/datdot-ui.js",
+  "scripts": {
+    "start": "budo demo/index.js:bundle.js --open --live --ssl",
+    "build": "browserify demo/index.js -o bundle.js",
+    "test": "echo \"Error: no test specified\" && exit 1"
+  },
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/playproject-io/datdot-ui.git"
+  },
+  "keywords": [
+    "datdot",
+    "ui",
+    "component"
+  ],
+  "author": "",
+  "license": "MIT",
+  "bugs": {
+    "url": "https://github.com/playproject-io/datdot-ui/issues"
+  },
+  "homepage": "https://github.com/playproject-io/datdot-ui#readme",
+  "devDependencies": {
+    "budo": "^11.6.4"
+  },
+  "dependencies": {
+    "bel": "^6.0.0",
+    "csjs-inject": "^1.0.1",
+    "debug": "^4.1.1"
+  }
+}
