@@ -5141,6 +5141,11 @@
 		left: 494px;
 		top: 5px;
 		overflow: visible;
+		transition: all 0.3s ease-in-out;
+		--web-animation: fadein 0.3s ease-in-out;
+		--web-action-type: page;
+		--web-action-target: Tablet_Laptop_plans1_create_new_plan_step3_data_config_cards_added.html;
+		cursor: pointer;
 	}
 	#button_bh {
 		opacity: 0;
@@ -9447,7 +9452,7 @@ window.application = new Application();
 					</path>
 				</svg>
 			</div>
-			<div id="next_button_bh">
+			<div onclick="application.goToTargetView(event)" id="next_button_bh">
 				<svg class="button_bh">
 					<rect id="button_bh" rx="8" ry="8" x="0" y="0" width="66" height="30">
 					</rect>
