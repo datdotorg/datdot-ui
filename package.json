@@ -10,7 +10,7 @@
   },
   "repository": {
     "type": "git",
-    "url": "git+https://github.com/datdotorg/datdot-ui.git"
+    "url": "git+https://github.com/playproject-io/datdot-ui.git"
   },
   "keywords": [
     "datdot",
@@ -20,9 +20,9 @@
   "author": "",
   "license": "MIT",
   "bugs": {
-    "url": "https://github.com/datdotorg/datdot-ui/issues"
+    "url": "https://github.com/playproject-io/datdot-ui/issues"
   },
-  "homepage": "https://github.com/datdotorg/datdot-ui#readme",
+  "homepage": "https://github.com/playproject-io/datdot-ui#readme",
   "devDependencies": {
     "browserify": "^17.0.0",
     "budo": "^11.6.4"
