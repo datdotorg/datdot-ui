@@ -1,6 +1,35 @@
 (function(){function r(e,n,t){function o(i,f){if(!n[i]){if(!e[i]){var c="function"==typeof require&&require;if(!f&&c)return c(i,!0);if(u)return u(i,!0);var a=new Error("Cannot find module '"+i+"'");throw a.code="MODULE_NOT_FOUND",a}var p=n[i]={exports:{}};e[i][0].call(p.exports,function(r){var n=e[i][1][r];return o(n||r)},p,p.exports,r,e,n,t)}return n[i].exports}for(var u="function"==typeof require&&require,i=0;i<t.length;i++)o(t[i]);return o}return r})()({1:[function(require,module,exports){
-localStorage.debug = '*' // to get debug output
+(function (__filename){(function (){
+const message_maker = require('message-maker')
 const datdotui = require('..')
+
+var id = 0
+
+// ------------------------------------
+const myaddress = `${__filename}-${id++}`
+const inbox = {}
+const outbox = {}
+const recipients = {}
+const names = {}
+const message_id = to => (outbox[to] = 1 + (outbox[to]||0))
+
+function make_protocol (name) {
+  return function protocol (address, notify) {
+    names[address] = recipients[name] = { name, address, notify, make: message_maker(myaddress) }
+    return { notify: listen, address: myaddress }
+  }
+}
+function listen (msg) {
+  console.log('DEMO', { msg })
+  const { head, refs, type, data, meta } = msg // receive msg
+  inbox[head.join('/')] = msg                  // store msg
+  const [from] = head
+  // send back ack
+  const { notify: from_notify, make: from_make, address: from_address } = names[from]
+  from_notify(from_make({ to: from_address, type: 'ack', refs: { 'cause': head } }))
+}
+// ------------------------------------
+
 const data = {
   plans: {
     title: 'PLANS',
@@ -11,9 +40,12 @@ const data = {
     tab: ['Calendar', 'Summary', 'Performance']
   }
 }
-const element = datdotui(data)
+
+const element = datdotui({data}, make_protocol('datdot-ui'))
+
 document.body.append(element)
-},{"..":303}],2:[function(require,module,exports){
+}).call(this)}).call(this,"/demo/demo.js")
+},{"..":315,"message-maker":308}],2:[function(require,module,exports){
 var trailingNewlineRegex = /\n[\s]+$/
 var leadingNewlineRegex = /^\n[\s]+/
 var trailingSpaceRegex = /[\s]+$/
@@ -247,7 +279,7 @@ module.exports = hyperx(belCreateElement, {comments: true})
 module.exports.default = module.exports
 module.exports.createElement = belCreateElement
 
-},{"./appendChild":2,"hyperx":299}],4:[function(require,module,exports){
+},{"./appendChild":2,"hyperx":310}],4:[function(require,module,exports){
 (function (global){(function (){
 'use strict';
 
@@ -266,7 +298,7 @@ function csjsInserter() {
 module.exports = csjsInserter;
 
 }).call(this)}).call(this,typeof global !== "undefined" ? global : typeof self !== "undefined" ? self : typeof window !== "undefined" ? window : {})
-},{"csjs":9,"insert-css":300}],5:[function(require,module,exports){
+},{"csjs":9,"insert-css":311}],5:[function(require,module,exports){
 'use strict';
 
 module.exports = require('csjs/get-css');
@@ -21981,7 +22013,7 @@ formatters.j = function (v) {
 };
 
 }).call(this)}).call(this,require('_process'))
-},{"./common":297,"_process":302}],297:[function(require,module,exports){
+},{"./common":297,"_process":314}],297:[function(require,module,exports){
 
 /**
  * This is the common logic for both the Node.js and web browser
@@ -22257,7 +22289,1170 @@ function setup(env) {
 
 module.exports = setup;
 
-},{"ms":301}],298:[function(require,module,exports){
+},{"ms":312}],298:[function(require,module,exports){
+(function (__filename){(function (){
+const style_sheet = require('support-style-sheet')
+const message_maker = require('message-maker')
+const make_img = require('make-image')
+const make_element = require('make-element')
+const make_grid = require('make-grid')
+const i_icon = require('datdot-ui-icon')
+
+var id = 0
+var icon_count = 0
+
+module.exports = i_button
+
+function i_button (opts, parent_protocol) {
+    const {name, role = 'button', controls, body = '', icons = {}, cover, classlist = null, mode = '', state, expanded = undefined, current = undefined, selected = false, checked = false, disabled = false, theme = {}} = opts
+    const el = make_element({name: 'i-button', classlist, role })
+//-------------------------------------------------
+    const myaddress = `${__filename}-${id++}`
+    const inbox = {}
+    const outbox = {}
+    const recipients = {}
+    const names = {}
+    const message_id = to => (outbox[to] = 1 + (outbox[to]||0))
+
+    const {notify, address} = parent_protocol(myaddress, listen)
+    names[address] = recipients['parent'] = { name: 'parent', notify, address, make: message_maker(myaddress) }
+    notify(recipients['parent'].make({ to: address, type: 'ready', refs: {} }))
+
+    function make_protocol (name) {
+        return function protocol (address, notify) {
+            names[address] = recipients[name] = { name, address, notify, make: message_maker(myaddress) }
+            return { notify: listen, address: myaddress }
+        }
+    }
+
+    function listen (msg) {
+        const { head, refs, type, data, meta } = msg // receive msg
+        inbox[head.join('/')] = msg                  // store msg
+        const [from, to, msg_id] = head
+        console.log('BUTTON', { type, name: names[from].name, msg })
+        // toggle
+        if (type.match(/switched/)) return switched_event(data)
+        // dropdown
+        if (type.match(/expanded/)) return expanded_event(data)
+        if (type.match(/collapsed/)) return collapsed_event(data)
+        // tab, checkbox
+        if (type.match(/tab-selected/)) return tab_selected_event(data)
+        // option
+        if (type.match(/selected|unselected/)) return list_selected_event(data)
+        if (type.match(/changed/)) return changed_event(data)
+        if (type.match(/current/)) {
+            // debugger
+            is_current = data
+            return set_attr({aria: 'current', prop: is_current})
+        }
+    }
+//-------------------------------------------------
+
+    const {icon = {}, select = { name: 'check' }, list = { name: 'arrow-down'} } = icons
+    if (icon?.name) var main_icon = i_icon({ name: icon.name, path: icon.path}, make_protocol(`${icon.name}-${icon_count++}`))
+    let is_current = current
+    let is_checked = checked
+    let is_disabled = disabled
+    let is_selected = selected
+    let is_expanded = 'expanded' in opts ? expanded : void 0
+
+    function widget () {
+        const { make } = recipients['parent']
+        const data = role === 'tab' ?  {selected: is_current ? 'true' : is_selected, current: is_current} : role === 'switch' ? {checked: is_checked} : role === 'listbox' ? {expanded: is_expanded} : disabled ? {disabled} : role === 'option' ? {selected: is_selected, current: is_current} : null
+        notify(make({ to: address, type: 'ready', data }))
+        const shadow = el.attachShadow({mode: 'closed'})
+        const text = make_element({name: 'span', classlist: 'text'})
+        const avatar = make_element({name: 'span', classlist: 'avatar'})
+        const listbox = make_element({name: 'span', classlist: 'listbox'})
+        const option = make_element({name: 'span', classlist: 'option'})
+        // check icon, img and body if has value
+        const add_cover = typeof cover === 'string' ? avatar : undefined
+        const add_text = body ? typeof body === 'object' ? 'undefined' : text : undefined
+        if (typeof cover === 'string') avatar.append(make_img({src: cover, alt: name}))
+        if (typeof cover === 'object') notify(make({ to: address, type: 'error', data: `cover[${typeof cover}] must to be a string` }))
+        if (typeof body === 'object') notify(make({ to: address, type: 'error', data: { body: `content is an ${typeof body}`, content: body } }))
+        if (!is_disabled) el.onclick = handle_click
+        el.setAttribute('aria-label', name)
+        text.append(body)
+        style_sheet(shadow, style)
+        const items = [main_icon, add_cover, add_text]
+        append_items(items, shadow, option, listbox)
+        init_attr(el)
+        return el
+    }
+
+    function init_attr (el) {
+        // define conditions
+        if (state) set_attr({aria: 'aria-live', prop: 'assertive'})
+        if (role === 'tab') {
+            set_attr({aria: 'selected', prop: is_selected})
+            set_attr({aria: 'controls', prop: controls})
+            el.setAttribute('tabindex', is_current ? 0 : -1)
+        }
+        if (role === 'switch') {
+            set_attr({aria: 'checked', prop: is_checked})
+        }
+        if (role === 'listbox') set_attr({aria: 'haspopup', prop: role})
+        if (disabled) {
+            set_attr({aria: 'disabled', prop: is_disabled})
+            el.setAttribute('disabled', is_disabled)
+        } 
+        if (is_checked) set_attr({aria: 'checked', prop: is_checked})
+        if (role.match(/option/)) {
+            is_selected = is_current ? is_current : is_selected
+            set_attr({aria: 'selected', prop: is_selected})
+        }
+        if (expanded !== undefined) {
+            set_attr({aria: 'expanded', prop: is_expanded})
+        }
+        // make current status
+        if (current !== undefined) set_attr({aria: 'current', prop: is_current})
+    }
+
+    // make element to append into shadowDOM
+    function append_items(items, shadow, option, listbox) {         
+        const [main_icon, add_cover, add_text] = items
+        const target = role === 'listbox' ? listbox : role === 'option' ?  option : shadow
+        // list of listbox or dropdown menu
+        if (role.match(/option/)) shadow.append(i_icon(list,  make_protocol(`${list.name}-${icon_count++}`)), option)
+        // listbox or dropdown button
+        if (role.match(/listbox/)) shadow.append(i_icon(select, make_protocol(`${select.name}-${icon_count++}`)), listbox)
+        items.forEach( item => {
+            if (item === undefined) return
+            target.append(item)
+        })
+    }
+
+    function set_attr ({aria, prop}) {
+        el.setAttribute(`aria-${aria}`, prop)
+    }
+
+    // toggle
+    function switched_event (data) {
+        const {checked} = data
+        is_checked = checked
+        if (is_checked) return set_attr({aria: 'checked', prop: is_checked})
+        else el.removeAttribute('aria-checked')
+    }
+    function expanded_event (data) {
+        is_expanded = data
+        set_attr({aria: 'expanded', prop: is_expanded})
+    }
+    function collapsed_event (data) {
+        is_expanded = data
+        set_attr({aria: 'expanded', prop: is_expanded})
+    }
+    // tab selected
+    function tab_selected_event ({selected}) {
+        is_selected = selected
+        set_attr({aria: 'selected', prop: is_selected})
+        el.setAttribute('tabindex', is_current ? 0 : -1)
+    }
+    function list_selected_event (data) {
+        is_selected = data
+        set_attr({aria: 'selected', prop: is_selected})
+        if (mode === 'listbox-single') {
+            is_current = is_selected
+            set_attr({aria: 'current', prop: is_current})
+        }
+        // option is selected then send selected items to listbox button
+        const { make } = recipients['parent']
+        if (is_selected) notify(make({ to: address, type: 'changed', data: {text: body, cover, icon } }))
+    }
+    function changed_event (data) {
+        const {text, cover, icon, title} = data
+        // new element
+        const new_text = make_element({name: 'span', classlist: 'text'})
+        const new_avatar = make_element({name: 'span', classlist: 'avatar'})
+        // old element
+        const old_icon = shadow.querySelector('.icon')
+        const old_avatar = shadow.querySelector('.avatar')
+        const old_text = shadow.querySelector('.text')
+        // change content for button or switch or tab
+        if (role.match(/button|switch|tab/)) {
+            el.setAttribute('aria-label', text || title)
+            if (text) {
+                if (old_text) old_text.textContent = text
+            } else {
+                if (old_text) old_text.remove()
+            }
+            if (cover) {
+                if (old_avatar) {
+                    const img = old_avatar.querySelector('img')
+                    img.alt = text || title
+                    img.src = cover
+                } else {
+                    new_avatar.append(make_img({src: cover, alt: text || title}))
+                    shadow.insertBefore(new_avatar, shadow.firstChild)
+                }
+            } else {
+                if (old_avatar) old_avatar.remove()
+            }
+            if (icon) {
+                const new_icon = i_icon({ name: icon.name, path: icon.path}, make_protocol(`${icon.name}-${icon_count++}`))
+                if (old_icon) old_icon.parentNode.replaceChild(new_icon, old_icon)
+                else shadow.insertBefore(new_icon, shadow.firstChild)
+            } else {
+                if (old_icon) old_icon.remove()
+            }
+        }
+        // change content for listbox
+        if (role.match(/listbox/)) {
+            listbox.innerHTML = ''
+            if (icon) {
+                const new_icon = i_icon({ name: icon.name, path: icon.path}, make_protocol(`${icon.name}-${icon_count++}`))
+                if (role.match(/listbox/)) listbox.append(new_icon)
+            }
+            if (cover) {
+                new_avatar.append(make_img({src: cover, alt: text}))
+                if (role.match(/listbox/)) listbox.append(new_avatar)
+            }
+            if (text) {
+                new_text.append(text)
+                if (role.match(/listbox/)) listbox.append(new_text)
+            }
+        } 
+    }
+    // button click
+    function handle_click () {
+        const { make } = recipients['parent']
+        const type = 'click'
+        const prev_state = {
+            expanded: is_expanded,
+            selected: is_selected
+        }
+        // debugger
+        if (is_current) {
+            notify(make({ to: address, type: 'current', data: {name, current: is_current } }) )
+        }
+        if (expanded !== undefined) {
+            is_expanded = !prev_state.expanded
+            const type = is_expanded ? 'expanded' : 'collapsed'
+            notify(make({ to: address, type, data: {name, expanded: is_expanded } }))
+        }
+        if (role === 'button') {
+            return notify( make({ to: address, type } ))
+        }
+        if (role === 'tab') {
+            if (is_current) return
+            is_selected = !prev_state.selected
+            return notify(make({ to: address, type, data: {name, selected: is_selected } }) )
+        }
+        if (role === 'switch') {
+            return notify(make({ to: address, type, data: {name, checked: is_checked } }) )
+        }
+        if (role === 'listbox') {
+            is_expanded = !prev_state.expanded
+            return notify(make({ to: address, type, data: {name, expanded: is_expanded } }))
+        }
+        if (role === 'option' || role === 'menuitem') {
+            is_selected = !prev_state.selected
+            return notify(make({ to: address, type, data: {name, selected: is_selected, content: is_selected ? {text: body, cover, icon} : '' } }) )
+        }
+    }
+   
+    // insert CSS style
+    const custom_style = theme ? theme.style : ''
+    // set CSS variables
+    const {props = {}, grid = {}} = theme
+    const {
+        // default -----------------------------------------//
+        padding, margin, width, height, opacity, 
+        // size
+        size, size_hover, 
+        // weight
+        weight, weight_hover, 
+        // color
+        color, color_hover, color_focus,
+        // background-color
+        bg_color, bg_color_hover, bg_color_focus,
+        // border
+        border_color, border_color_hover,
+        border_width, border_style, border_opacity, border_radius, 
+        // icon
+        icon_fill, icon_fill_hover, icon_size, icon_size_hover,
+        // avatar
+        avatar_width, avatar_height, avatar_radius,
+        avatar_width_hover, avatar_height_hover,
+        // shadow
+        shadow_color, shadow_color_hover, 
+        offset_x, offset_x_hover,
+        offset_y, offset_y_hover, 
+        blur, blur_hover,
+        shadow_opacity, shadow_opacity_hover,
+        // scale
+        scale, scale_hover,
+        // current -----------------------------------------//
+        current_size, 
+        current_weight, 
+        current_color, 
+        current_bg_color,
+        current_icon_size,
+        current_icon_fill,
+        current_list_selected_icon_size,
+        current_list_selected_icon_fill,
+        current_avatar_width, 
+        current_avatar_height,
+        // disabled -----------------------------------------//
+        disabled_size, disabled_weight, disabled_color,
+        disabled_bg_color, disabled_icon_fill, disabled_icon_size,
+        // role === option ----------------------------------//
+        list_selected_icon_size, list_selected_icon_size_hover,
+        list_selected_icon_fill, list_selected_icon_fill_hover,
+        // role === listbox ----------------------------------//
+        // collapsed settings
+        listbox_collapsed_bg_color, listbox_collapsed_bg_color_hover,
+        listbox_collapsed_icon_size, listbox_collapsed_icon_size_hover,
+        listbox_collapsed_icon_fill, listbox_collapsed_icon_fill_hover, 
+        listbox_collapsed_listbox_color, listbox_collapsed_listbox_color_hover,
+        listbox_collapsed_listbox_size, listbox_collapsed_listbox_size_hover,
+        listbox_collapsed_listbox_weight, listbox_collapsed_listbox_weight_hover,
+        listbox_collapsed_listbox_icon_size, listbox_collapsed_listbox_icon_size_hover,
+        listbox_collapsed_listbox_icon_fill, listbox_collapsed_listbox_icon_fill_hover,
+        listbox_collapsed_listbox_avatar_width, listbox_collapsed_listbox_avatar_height,
+        // expanded settings
+        listbox_expanded_bg_color,
+        listbox_expanded_icon_size, 
+        listbox_expanded_icon_fill,
+        listbox_expanded_listbox_color,
+        listbox_expanded_listbox_size, 
+        listbox_expanded_listbox_weight,
+        listbox_expanded_listbox_avatar_width, 
+        listbox_expanded_listbox_avatar_height,
+        listbox_expanded_listbox_icon_size, 
+        listbox_expanded_listbox_icon_fill, 
+    } = props
+
+    const grid_init = {auto: {auto_flow: 'column'}, align: 'items-center', gap: '5px', justify: 'items-center'}
+    const grid_option = grid.option ? grid.option : grid_init
+    const grid_listbox = grid.listbox ? grid.listbox : grid_init
+    const style = `
+    :host(i-button) {
+        --size: ${size ? size : 'var(--primary-size)'};
+        --weight: ${weight ? weight : 'var(--weight300)'};
+        --color: ${color ? color : 'var(--primary-color)'};
+        --color-focus: ${color_focus ? color_focus : 'var(--primary-color-focus)'};
+        --bg-color: ${bg_color ? bg_color : 'var(--primary-bg-color)'};
+        --bg-color-focus: ${bg_color_focus ? bg_color_focus : 'var(--primary-bg-color-focus)'};
+        ${width && `--width: ${width}`};
+        ${height && `--height: ${height}`};
+        --opacity: ${opacity ? opacity : '1'};
+        --padding: ${padding ? padding : '12px'};
+        --margin: ${margin ? margin : '0'};
+        --border-width: ${border_width ? border_width : '0px'};
+        --border-style: ${border_style ? border_style : 'solid'};
+        --border-color: ${border_color ? border_color : 'var(--primary-color)'};
+        --border-opacity: ${border_opacity ? border_opacity : '1'};
+        --border: var(--border-width) var(--border-style) hsla( var(--border-color), var(--border-opacity) );
+        --border-radius: ${border_radius ? border_radius : 'var(--primary-radius)'};
+        --offset_x: ${offset_x ? offset_x : '0px'};
+        --offset-y: ${offset_y ? offset_y : '6px'};
+        --blur: ${blur ? blur : '30px'};
+        --shadow-color: ${shadow_color ? shadow_color : 'var(--primary-color)'};
+        --shadow-opacity: ${shadow_opacity ? shadow_opacity : '0'};
+        --box-shadow: var(--offset_x) var(--offset-y) var(--blur) hsla( var(--shadow-color), var(--shadow-opacity) );
+        --avatar-width: ${avatar_width ? avatar_width : 'var(--primary-avatar-width)'};
+        --avatar-height: ${avatar_height ? avatar_height : 'var(--primary-avatar-height)'};
+        --avatar-radius: ${avatar_radius ? avatar_radius : 'var(--primary-avatar-radius)'};
+        display: inline-grid;
+        ${grid.button ? make_grid(grid.button) : make_grid({auto: {auto_flow: 'column'}, gap: '5px', justify: 'content-center', align: 'items-center'})}
+        ${width && 'width: var(--width);'};
+        ${height && 'height: var(--height);'};
+        max-width: 100%;
+        font-size: var(--size);
+        font-weight: var(--weight);
+        color: hsl( var(--color) );
+        background-color: hsla( var(--bg-color), var(--opacity) );
+        border: var(--border);
+        border-radius: var(--border-radius);
+        box-shadow: var(--box-shadow);
+        padding: var(--padding);
+        transition: font-size .3s, font-weight .15s, color .3s, background-color .3s, opacity .3s, border .3s, box-shadow .3s ease-in-out;
+        cursor: pointer;
+        -webkit-mask-image: -webkit-radial-gradient(white, black);
+    }
+    :host(i-button:hover) {
+        --size: ${size_hover ? size_hover : 'var(--primary-size-hover)'};
+        --weight: ${weight_hover ? weight_hover : 'var(--primary-weight-hover)'};
+        --color: ${color_hover ? color_hover : 'var(--primary-color-hover)'};
+        --bg-color: ${bg_color_hover ? bg_color_hover : 'var(--primary-bg-color-hover)'};
+        --border-color: ${border_color_hover ? border_color_hover : 'var(--primary-color-hover)'};
+        --offset-x: ${offset_x_hover ? offset_x_hover : '0'};
+        --offset-y: ${offset_y_hover ? offset_y_hover : '0'};
+        --blur: ${blur_hover ? blur_hover : '50px'};
+        --shadow-color: ${shadow_color_hover ? shadow_color_hover : 'var(--primary-color-hover)'};
+        --shadow-opacity: ${shadow_opacity_hover ? shadow_opacity_hover : '0'};
+    }
+    :host(i-button:hover:foucs:active) {
+        --bg-color: ${bg_color ? bg_color : 'var(--primary-bg-color)'};
+    }
+    :host(i-button:focus) {
+        --color: var(--color-focus);
+        --bg-color: var(--bg-color-focus);
+        background-color: hsla(var(--bg-color));
+    }  
+    :host(i-button) g {
+        --icon-fill: ${icon_fill ? icon_fill : 'var(--primary-icon-fill)'};
+        fill: hsl(var(--icon-fill));
+        transition: fill 0.05s ease-in-out;
+    }
+    :host(i-button:hover) g {
+        --icon-fill: ${icon_fill_hover ? icon_fill_hover : 'var(--primary-icon-fill-hover)'};
+    }
+    :host(i-button) .avatar {
+        display: block;
+        width: var(--avatar-width);
+        height: var(--avatar-height);
+        max-width: 100%;
+        border-radius: var(--avatar-radius);
+        -webkit-mask-image: -webkit-radial-gradient(white, black);
+        overflow: hidden;
+        transition: width .3s, height .3s ease-in-out;
+        ${make_grid(grid.avatar)}
+    }
+    :host(i-button) img {
+        --scale: ${scale ? scale : '1'};
+        width: 100%;
+        height: 100%;
+        transform: scale(var(--scale));
+        transition: transform 0.3s, scale 0.3s linear;
+        object-fit: cover;
+        border-radius: var(--avatar-radius);
+    }
+    :host(i-button:hover) img {
+        --scale: ${scale_hover ? scale_hover : '1.2'};
+        transform: scale(var(--scale));
+    }
+    :host(i-button) svg {
+        width: 100%;
+        height: auto;
+    }
+    :host(i-button[aria-expanded="true"]:focus) {
+        --color: var(--color-focus);
+        --bg-color: var(--bg-color-focus);
+    } 
+    :host(i-button[role="tab"]) {
+        --width: ${width ? width : '100%'};
+        --border-radius: ${border_radius ? border_radius : '0'};
+    }
+    :host(i-button[role="switch"]) {
+        --size: ${size ? size : 'var(--primary-size)'};
+    }
+    :host(i-button[role="switch"]:hover) {
+        --size: ${size_hover ? size_hover : 'var(--primary-size-hover)'};
+    }
+    :host(i-button[role="switch"]:focus) {
+        --color: var(--color-focus);
+        --bg-color: var(--bg-color-focus);
+    }
+    :host(i-button[role="listbox"]) {
+        --color: ${listbox_collapsed_listbox_color ? listbox_collapsed_listbox_color : 'var(--listbox-collapsed-listbox-color)'};
+        --size: ${listbox_collapsed_listbox_size ? listbox_collapsed_listbox_size : 'var(--listbox-collapsed-listbox-size)'};
+        --weight: ${listbox_collapsed_listbox_weight ? listbox_collapsed_listbox_weight : 'var(--listbox-collapsed-listbox-weight)'};
+        --bg-color: ${listbox_collapsed_bg_color ? listbox_collapsed_bg_color : 'var(--listbox-collapsed-bg-color)'};
+    }
+    :host(i-button[role="listbox"]:hover) {
+        --color: ${listbox_collapsed_listbox_color_hover ? listbox_collapsed_listbox_color_hover : 'var(--listbox-collapsed-listbox-color-hover)'};
+        --size: ${listbox_collapsed_listbox_size_hover ? listbox_collapsed_listbox_size_hover : 'var(--listbox-collapsed-listbox-size-hover)'};
+        --weight: ${listbox_collapsed_listbox_weight_hover ? listbox_collapsed_listbox_weight_hover : 'var(--listbox-collapsed-listbox-weight-hover)'};
+        --bg-color: ${listbox_collapsed_bg_color_hover ? listbox_collapsed_bg_color_hover : 'var(--listbox-collapsed-bg-color-hover)'};
+    }
+    :host(i-button[role="listbox"]:focus), :host(i-button[role="listbox"][aria-expanded="true"]:focus) {
+        --color: var(--color-focus);
+        --bg-color: var(--bg-color-focus);
+    }
+    :host(i-button[role="listbox"]) > .icon {
+        ${grid.icon ? make_grid(grid.icon) : make_grid({column: '2'})}
+    }
+    :host(i-button[role="listbox"]) .text {}
+    :host(i-button[role="listbox"]) .avatar {
+        --avatar-width: ${listbox_collapsed_listbox_avatar_width ? listbox_collapsed_listbox_avatar_width : 'var(--listbox-collapsed-listbox-avatar-width)'};
+        --avatar-height: ${listbox_collapsed_listbox_avatar_height ? listbox_collapsed_listbox_avatar_height : 'var(--listbox-collapsed-listbox-avatar-height)'}
+    }
+    :host(i-button[role="listbox"][aria-expanded="true"]),
+    :host(i-button[role="listbox"][aria-expanded="true"]:hover) {
+        --size: ${listbox_expanded_listbox_size ? listbox_expanded_listbox_size : 'var(--listbox-expanded-listbox-size)'};
+        --color: ${listbox_expanded_listbox_color ? listbox_expanded_listbox_color : 'var(--listbox-expanded-listbox-color)'};
+        --weight: ${listbox_expanded_listbox_weight ? listbox_expanded_listbox_weight : 'var(--listbox-expanded-listbox-weight)'};
+        --bg-color: ${listbox_expanded_bg_color ? listbox_expanded_bg_color : 'var(--listbox-expanded-bg-color)'}
+    }
+    :host(i-button[role="listbox"][aria-expanded="true"]) .avatar {
+        --avatar-width: ${listbox_expanded_listbox_avatar_width ? listbox_expanded_listbox_avatar_width : 'var(--listbox-expanded-listbox-avatar-width)'};
+        --avatar-height: ${listbox_expanded_listbox_avatar_height ? listbox_expanded_listbox_avatar_height : 'var(--listbox-expanded-listbox-avatar-height)'};
+    }
+    :host(i-button[role="option"]) {
+        --border-radius: ${border_radius ? border_radius : '0'};
+        --opacity: ${opacity ? opacity : '0'};
+    }
+    :host(i-button[role="option"][aria-current="true"]), :host(i-button[role="option"][aria-current="true"]:hover) {
+        --size: ${current_size ? current_size : 'var(--current-list-size)'};
+        --color: ${current_color ? current_color : 'var(--current-list-color)'};
+        --bg-color: ${current_bg_color ? current_bg_color : 'var(--current-list-bg-color)'};
+        --opacity: ${opacity ? opacity : '0'}
+    }
+    :host(i-button[role="option"][aria-current="true"]:focus) {
+        --color: var(--color-focus);
+        --bg-color: var(--bg-color-focus);
+    }
+    :host(i-button[role="option"][disabled]), :host(i-button[role="option"][disabled]:hover) {
+        --size: ${disabled_size ? disabled_size : 'var(--primary-disabled-size)'};
+        --color: ${disabled_color ? disabled_color : 'var(--primary-disabled-color)'};
+        --bg-color: ${disabled_bg_color ? disabled_bg_color : 'var(--primary-disabled-bg-color)'};
+        --opacity: ${opacity ? opacity : '0'}
+    }
+    :host(i-button[aria-disabled="true"]) .icon, 
+    :host(i-button[aria-disabled="true"]:hover) .icon,
+    :host(i-button[role="option"][aria-disabled="true"]) .icon, 
+    :host(i-button[role="option"][aria-disabled="true"]:hover) .icon,
+    :host(i-button[role="listbox"][aria-disabled="true"]) .icon, 
+    :host(i-button[role="listbox"][aria-disabled="true"]:hover) .icon {
+        --icon-size: ${disabled_icon_size ? disabled_icon_size : 'var(--primary-disabled-icon-size)'};
+    }
+    :host(i-button[disabled]:hover) img {
+        transform: scale(1);
+    }
+    :host(i-button[aria-current="true"]), :host(i-button[aria-current="true"]:hover) {
+        --size: ${current_size ? current_size : 'var(--current-size)'};
+        --weight: ${current_weight ? current_weight : 'var(--current-weight)'};
+        --color: ${current_color ? current_color : 'var(--current-color)'};
+        --bg-color: ${current_bg_color ? current_bg_color : 'var(--current-bg-color)'};
+    }
+    :host(i-button[aria-current="true"]) .icon,  :host(i-button[aria-current="true"]:hover) .icon {
+        --icon-size: ${current_icon_size ? current_icon_size : 'var(--current-icon-size)'};
+    }
+    :host(i-button[aria-current="true"]) g {
+        --icon-fill: ${current_icon_fill ? current_icon_fill : 'var(--current-icon-fill)'};
+    }
+    :host(i-button[aria-current="true"]:focus) {
+        --color: var(--color-focus);
+        --bg-color: var(--bg-color-focus);
+    }
+    :host(i-button[role="option"][aria-current="true"][aria-selected="true"]) .option > .icon, 
+    :host(i-button[role="option"][aria-current="true"][aria-selected="true"]:hover) .option > .icon {
+        --icon-size: ${current_icon_size ? current_icon_size : 'var(--current-icon-size)'};
+    }
+    :host(i-button[aria-checked="true"]), :host(i-button[aria-expanded="true"]),
+    :host(i-button[aria-checked="true"]:hover), :host(i-button[aria-expanded="true"]:hover) {
+        --size: ${current_size ? current_size : 'var(--current-size)'};
+        --weight: ${current_weight ? current_weight : 'var(--current-weight)'};
+        --color: ${current_color ? current_color : 'var(--current-color)'};
+        --bg-color: ${current_bg_color ? current_bg_color : 'var(--current-bg-color)'};
+    }
+    /*
+    :host(i-button[role="switch"][aria-expanded="true"]) g {
+        --icon-fill: var(--current-icon-fill);
+    }*/
+    /* listbox collapsed */
+    :host(i-button[role="listbox"]) > .icon {
+        --icon-size: ${listbox_collapsed_icon_size ? listbox_collapsed_icon_size : 'var(--listbox-collapsed-icon-size)'};
+    }
+    :host(i-button[role="listbox"]:hover) > .icon {
+        --icon-size: ${listbox_collapsed_icon_size_hover ? listbox_collapsed_icon_size_hover : 'var(--listbox-collapsed-icon-size-hover)'};
+    }
+    :host(i-button[role="listbox"]) .listbox > .icon {
+        --icon-size: ${listbox_collapsed_listbox_icon_size ? listbox_collapsed_listbox_icon_size : 'var(--listbox-collapsed-listbox-icon-size)'};
+    }
+    :host(i-button[role="listbox"]:hover) .listbox > .icon {
+        --icon-size: ${listbox_collapsed_listbox_icon_size_hover ? listbox_collapsed_listbox_icon_size_hover : 'var(--listbox-collapsed-listbox-icon-size-hover)'};
+    }
+    :host(i-button[role="listbox"]) > .icon g {
+        --icon-fill: ${listbox_collapsed_icon_fill ? listbox_collapsed_icon_fill : 'var(--listbox-collapsed-icon-fill)'};
+    }
+    :host(i-button[role="listbox"]:hover) > .icon g {
+        --icon-fill: ${listbox_collapsed_icon_fill_hover ? listbox_collapsed_icon_fill_hover : 'var(--listbox-collapsed-icon-fill-hover)'};
+    }
+    :host(i-button[role="listbox"]) .listbox > .icon g {
+        --icon-fill: ${listbox_collapsed_listbox_icon_fill ? listbox_collapsed_listbox_icon_fill : 'var(--listbox-collaps-listbox-icon-fill)'};
+    }
+    :host(i-button[role="listbox"]:hover) .listbox > .icon g {
+        --icon-fill: ${listbox_collapsed_listbox_icon_fill_hover ? listbox_collapsed_listbox_icon_fill_hover : 'var(--listbox-collapsed-listbox-icon-fill-hover)'};
+    }
+    /* listbox expanded */
+    :host(i-button[role="listbox"][aria-expanded="true"]) > .icon,
+    :host(i-button[role="listbox"][aria-expanded="true"]:hover) > .icon {
+        --icon-size: ${listbox_expanded_icon_size ? listbox_expanded_icon_size : 'var(--listbox-expanded-icon-size)'};
+    }
+    :host(i-button[role="listbox"][aria-expanded="true"]) > .icon g, 
+    :host(i-button[role="listbox"][aria-expanded="true"]:hover) > .icon g {
+        --icon-fill: ${listbox_expanded_icon_fill ? listbox_expanded_icon_fill : 'var(--listbox-expanded-icon-fill)'}
+    }
+    :host(i-button[role="listbox"][aria-expanded="true"]) .listbox > .icon, 
+    :host(i-button[role="listbox"][aria-expanded="true"]:hover) .listbox > .icon {
+        --icon-fill: ${listbox_expanded_listbox_icon_size ? listbox_expanded_listbox_icon_size : 'var(--listbox-expanded-listbox-icon-size)'};
+    }
+    :host(i-button[role="listbox"][aria-expanded="true"]) .listbox > .icon g,
+    :host(i-button[role="listbox"][aria-expanded="true"]:hover) .listbox > .icon g {
+        --icon-fill: ${listbox_expanded_listbox_icon_fill ? listbox_expanded_listbox_icon_fill : 'var(--listbox-expanded-listbox-icon-fill)'};
+    }
+    :host(i-button[aria-checked="true"]) > .icon g {
+        --icon-fill: ${current_icon_fill ? current_icon_fill : 'var(--color-white)' };
+    }
+    :host(i-button[disabled]), :host(i-button[disabled]:hover) {
+        --size: ${disabled_size ? disabled_size : 'var(--primary-disabled-size)'};
+        --color: ${disabled_color ? disabled_color : 'var(--primary-disabled-color)'};
+        --bg-color: ${disabled_bg_color ? disabled_bg_color : 'var(--primary-disabled-bg-color)'};
+        cursor: not-allowed;
+    }
+    :host(i-button[disabled]) g, 
+    :host(i-button[disabled]:hover) g, 
+    :host(i-button[role="option"][disabled]) > .icon g, 
+    :host(i-button[role="option"][disabled]) .option > .icon g,
+    :host(i-button[role="listbox"][disabled]) .option > .icon g, 
+    :host(i-button[role="option"][disabled]:hover) > .icon g,
+    :host(i-button[role="listbox"][disabled]:hover) .option > .icon g, 
+    :host(i-button[role="option"][disabled]:hover) .option > .icon g {
+        --icon-fill: ${disabled_color ? disabled_color : 'var(--primary-disabled-icon-fill)'};
+    }
+    :host(i-button[role="menuitem"]) {
+        --size: ${size ? size : 'var(--menu-size)'};
+        --weight: ${weight ? weight : 'var(--menu-weight)'};
+        --color: ${color ? color : 'var(--menu-color)'};
+        --border-radius: 0;
+        background-color: transparent;
+    }
+    :host(i-button[role="menuitem"]:hover) {
+        --size: ${size_hover ? size_hover : 'var(--menu-size-hover)'};
+        --weight: ${weight_hover ? weight_hover : 'var(--menu-weight-hover)'};
+        --color: ${color_hover ? color_hover : 'var(--menu-color-hover)'};
+    }
+    // :host(i-button[role="menuitem"][aria-selected="true"]:focus) {
+    //     --color: var(--color-focus);
+    //     --bg-color: var(--bg-color-focus);
+    // }
+    :host(i-button[role="menuitem"][aria-selected="true"]) {
+        --color: var(--color-focus);
+        --bg-color: var(--bg-color-focus);
+    }
+    :host(i-button[role="menuitem"]) .avatar {
+        --avatar-width: ${avatar_width ? avatar_width : 'var(--menu-avatar-width)'};
+        --avatar-height: ${avatar_height ? avatar_height : 'var(--menu-avatar-height)'};
+        --avatar-radius: ${avatar_radius ? avatar_radius : 'var(--menu-avatar-radius)'};
+    }
+    :host(i-button[role="menuitem"]:hover) .avatar {
+        --avatar-width: ${avatar_width_hover ? avatar_width_hover : 'var(--menu-avatar-width-hover)'};
+        --avatar-height: ${avatar_height_hover ? avatar_height_hover : 'var(--menu-avatar-height-hover)'};
+    }
+    :host(i-button[role="menuitem"][disabled]), :host(i-button[role="menuitem"][disabled]):hover {
+        --size: ${disabled_size ? disabled_size : 'var(--menu-disabled-size)'};
+        --color: ${disabled_color ? disabled_color : 'var(--menu-disabled-color)'};
+        --weight: ${disabled_weight ? disabled_weight : 'var(--menu-disabled-weight)'};
+    }
+    :host(i-button[role="menuitem"][disabled]) g ,
+    :host(i-button[role="menuitem"][disabled]:hover) g {
+        --icon-fill: ${disabled_icon_fill ? disabled_icon_fill : 'var(--primary-disabled-icon-fill)'};
+    }
+    :host(i-button[role="option"]) > .icon {
+        --icon-size: ${list_selected_icon_size ? list_selected_icon_size : 'var(--list-selected-icon-size)'};
+    }
+    :host(i-button[role="option"]:hover) > .icon {
+        --icon-size: ${list_selected_icon_size_hover ? list_selected_icon_size_hover : 'var(--list-selected-icon-size-hover)'};
+    }
+    :host(i-button[role="option"]) > .icon g {
+        --icon-fill: ${list_selected_icon_fill ? list_selected_icon_fill : 'var(--list-selected-icon-fill)'};
+    }
+    :host(i-button[role="option"]:hover) > .icon g {
+        --icon-fill: ${list_selected_icon_fill_hover ? list_selected_icon_fill_hover : 'var(--list-selected-icon-fill-hover)'};
+    }
+    :host(i-button[role="option"][aria-current="true"]) > .icon, 
+    :host(i-button[role="option"][aria-current="true"]:hover) > .icon {
+        --icon-size: ${current_list_selected_icon_size ? current_list_selected_icon_size : 'var(--current-list-selected-icon-size)'};
+    }
+    :host(i-button[role="option"][aria-current="true"]) > .icon g, 
+    :host(i-button[role="option"][aria-current="true"]:hover) > .icon g { 
+        --icon-fill: ${current_list_selected_icon_fill ? current_list_selected_icon_fill : 'var(--current-list-selected-icon-fill)'};
+    }
+    :host(i-button[role="option"][aria-selected="false"]) > .icon {
+        opacity: 0;
+        transition: opacity 0.3s ease-in-out;
+    }
+    :host(i-button[role="option"][aria-selected="true"]) > .icon {
+        opacity: 1;
+    }
+    /* define grid */
+    :host(i-button) .text {
+        ${make_grid(grid.text)}
+    }
+    :host(i-button) .icon {
+        --icon-size: ${icon_size ? icon_size : 'var(--primary-icon-size)'};
+        display: block;
+        width: var(--icon-size);
+        transition: width 0.25s ease-in-out;
+        ${make_grid(grid.icon)}
+    }
+    :host(i-button:hover) .icon {
+        --icon-size: ${icon_size_hover ? icon_size_hover : 'var(--primary-icon-size-hover)'};
+    }
+    :host(i-button) .listbox {
+        display: grid;
+        max-width: 100%;
+        ${make_grid(grid_listbox)}
+    }
+    :host(i-button) .option {
+        display: grid;
+        max-width: 100%;
+        ${make_grid(grid_option)}
+    }
+    :host(i-button) .option > .icon {
+        ${make_grid(grid.option_icon)}
+    }
+    :host(i-button) .option > .avatar {
+        ${make_grid(grid.option_avatar)}
+    }
+    :host(i-button) .option > .text {
+        ${make_grid(grid.option_text)}
+    }
+    ${custom_style}
+    `
+
+    return widget()
+}
+}).call(this)}).call(this,"/node_modules/.pnpm/github.com+datdotorg+datdot-ui-tab@9fd66d92f49d6f2d516b8020763ce01baf716566/node_modules/datdot-ui-button/src/index.js")
+},{"datdot-ui-icon":303,"make-element":299,"make-grid":300,"make-image":301,"message-maker":308,"support-style-sheet":302}],299:[function(require,module,exports){
+module.exports = make_element
+
+function make_element({name = '', classlist = null, role }) {
+    const el = document.createElement(name)
+    if (classlist) set_class()
+    if (role) set_role()
+    return el
+
+    function set_class () {
+        el.className = classlist
+    }
+    
+    function set_role () {
+        const tabindex = role.match(/button|switch/) ? 0 : -1
+        el.setAttribute('role', role)
+        el.setAttribute('tabindex',  tabindex)
+    }
+}
+
+
+},{}],300:[function(require,module,exports){
+module.exports = make_grid
+
+function make_grid (opts = {}) {
+    const {areas, area, rows, columns, row, auto = {}, column, gap, justify, align} = opts
+    let style = ''
+    grid_init ()
+    return style
+
+    function grid_init () {
+        make_rows()
+        make_columns()
+        make_auto()
+        make_row()
+        make_column()
+        make_justify()
+        make_align()
+        make_gap()
+        make_area()
+        make_areas()
+    }
+     
+    function make_areas () {
+        if (typeof areas === 'object') {
+            let template = `grid-template-areas:`
+            areas.map( a => template += `"${a}"`)
+            return style += template + ';'
+        }
+        if (typeof areas === 'string') return areas ? style +=`grid-template-areas: "${areas}";` : ''
+    }
+    function make_area () {
+        return area ? style += `grid-area: ${area};` : ''
+    }
+
+    function make_rows () { 
+        return rows ? style +=  `grid-template-rows: ${rows};` : ''
+    }
+
+    function make_columns () {
+        return columns ? style += `grid-template-columns: ${columns};` : ''
+    }
+
+    function make_row () {
+        return row ? style += `grid-row: ${row};` : ''
+    }
+
+    function make_column () {
+        return column ? style += `grid-column: ${column};` : ''
+    }
+
+    function make_justify () {
+        if (justify === void 0) return
+        const result = justify.split('-')
+        const [type, method] = result
+        return style += `justify-${type}: ${method};`
+    }
+
+    function make_align () {
+        if (align === void 0) return
+        const result = align.split('-')
+        const [type, method] = result
+        return style += `align-${type}: ${method};`
+    }
+
+    function make_gap () {
+        if (gap === void 0) return ''
+        return style += `gap: ${gap};`
+    }
+
+    function make_auto () {
+        const {auto_flow = null, auto_rows = null, auto_columns = null} = auto
+        const grid_auto_flow = auto_flow ? `grid-auto-flow: ${auto_flow};` : ''
+        const grid_auto_rows = auto_rows ? `grid-auto-rows: ${auto_rows};` : ''
+        const grid_auto_columns = auto_columns ? `grid-auto-columns: ${auto_columns};` : ''
+        return style += `${grid_auto_flow}${grid_auto_rows}${grid_auto_columns}`
+    }
+}
+},{}],301:[function(require,module,exports){
+module.exports = img
+
+function img ({src, alt}) {
+    const img = document.createElement('img')
+    img.setAttribute('src', src)
+    img.setAttribute('alt', alt)
+    return img
+}
+},{}],302:[function(require,module,exports){
+module.exports = support_style_sheet
+function support_style_sheet (root, style) {
+    return (() => {
+        try {
+            const sheet = new CSSStyleSheet()
+            sheet.replaceSync(style)
+            root.adoptedStyleSheets = [sheet]
+            return true 
+        } catch (error) { 
+            const inject_style = `<style>${style}</style>`
+            root.innerHTML = `${inject_style}`
+            return false
+        }
+    })()
+}
+},{}],303:[function(require,module,exports){
+(function (__filename){(function (){
+const style_sheet = require('support-style-sheet')
+const svg = require('svg')
+const message_maker = require('message-maker')
+
+var id = 0
+
+module.exports = ({name, path, is_shadow = false, theme}, parent_protocol) => {
+// ---------------------------------------------------------------
+    const myaddress = `${__filename}-${id++}`
+    const inbox = {}
+    const outbox = {}
+    const recipients = {}
+    const names = {}
+    const message_id = to => (outbox[to] = 1 + (outbox[to]||0))
+
+    const {notify, address} = parent_protocol(myaddress, listen)
+    names[address] = recipients['parent'] = { name: 'parent', notify, address, make: message_maker(myaddress) }
+    notify(recipients['parent'].make({ to: address, type: 'ready', refs: ['old_logs', 'new_logs'] }))
+
+    function listen (msg) {
+        const {head, refs, type, data, meta } = msg
+        inbox[head.join('/')] = msg                  // store msg
+        const [from, to, msg_id] = head    
+        console.log('New message', { msg })
+    }
+ // ---------------------------------------------------------------   
+    const url = path ? path : './src/svg'
+    const symbol = svg(`${url}/${name}.svg`)
+    if (is_shadow) {
+        function layout (style) {
+            const icon = document.createElement('i-icon')
+            const shadow = icon.attachShadow({mode: 'closed'})
+            const slot = document.createElement('slot')
+            slot.name = 'icon'
+            style_sheet(shadow, style)
+            slot.append(symbol)
+            shadow.append(slot)
+            shadow.addEventListener('click', handleOnClick)
+            return icon
+        }
+
+        function handleOnClick (e) {
+            console.log('Click', e)
+            const { notify, address, make } = recipients['parent']
+            notify(make({ to: address, type: 'click', data: { event: e }, refs: {} }))
+        }
+
+        // insert CSS style
+        const custom_style = theme ? theme.style : ''
+        // set CSS variables
+        if (theme && theme.props) {
+            var { fill, size } = theme.props
+        }
+        const style = `
+        :host(i-icon) {
+            --size: ${size ? size : '24px'};
+            --fill: ${fill ? fill : 'var(--primary-color)'};
+            display: block;
+        }
+        slot[name='icon'] {
+            display: grid;
+            justify-content: center;
+            align-items: center;
+        }
+        slot[name='icon'] span {
+            display: block;
+            width: var(--size);
+            height: var(--size);
+        }
+        slot[name='icon'] svg {
+            width: 100%;
+            height: auto;
+        }
+        slot[name='icon'] g {
+            fill: hsl(var(--fill));
+            transition: fill .3s ease-in-out;
+        }
+        ${custom_style}
+        `
+        return layout(style)
+    }
+
+    return symbol
+}
+
+}).call(this)}).call(this,"/node_modules/.pnpm/github.com+datdotorg+datdot-ui-button@4c79abf13151846d1ba473f42feb1406baa5babc/node_modules/datdot-ui-icon/src/index.js")
+},{"message-maker":308,"support-style-sheet":304,"svg":305}],304:[function(require,module,exports){
+arguments[4][302][0].apply(exports,arguments)
+},{"dup":302}],305:[function(require,module,exports){
+module.exports = svg
+function svg (path) {
+    const span = document.createElement('span')
+    span.classList.add('icon')
+    get_svg()
+    async function get_svg () {
+        const res = await fetch(path)
+        if (res.status !== 200) throw new Error(res.status)
+        let data = await res.text()
+        span.innerHTML = data
+    }
+    return span
+}   
+},{}],306:[function(require,module,exports){
+(function (__filename){(function (){
+const bel = require('bel')
+const csjs = require('csjs-inject')
+const path = require('path')
+const filename = path.basename(__filename)
+const button = require('datdot-ui-button')
+
+module.exports = datdot_ui_tab
+
+function datdot_ui_tab({page, name = 'tab', flow, arr}, protocol)  {
+    const widget = 'ui-tab'
+    const recipients = []
+    const send2Parent = protocol( receive )
+    const tabList = bel`<nav role="tablist" aria-tab="${name}" class=${css['ui-tab']}> </nav>`
+    tabs(arr)
+    send2Parent({page, from: name, flow: flow ? `${flow}/${widget}` : widget, type: 'init', filename, line: 15})
+    return tabList
+
+    // make tab
+    function tabs (args) {
+        return args.map( (item, index) => {
+            const btn = button({page, flow: flow ? `${flow}/${widget}`: widget, name: item, content: item, style: 'tab', current: index === 0 ? true : false}, buttonProtocol(item))
+            tabList.append(btn)
+        })
+    }
+
+    /*************************
+    * ------- Actions --------
+    *************************/
+    function actionSwitch(args, message) {
+        const { page, from, flow, type, action, body } = message
+        const classList = []
+        args.forEach( (btn, i) => {
+            const target = btn.getAttribute('name')
+            classList.push( target )
+            const type = target === from ? 'current-active' : 'remove-current'
+            const name = target === from ? from : classList[i]
+            const log = { page, from: name, flow, type}
+            recipients[name](log)
+            return send2Parent({...log, body, filename, line: 38})
+        })
+    }
+
+    /*************************
+    * ------ Receivers -------
+    *************************/
+    function receive (message) {
+        const {page, from, flow, type, action, body} = message
+    }
+
+    /*************************
+    * ------ Protocols -------
+    *************************/
+    function buttonProtocol (name) {
+        return send => {
+            recipients[name] = send
+            return function btnReceive (message) {
+                const {type} = message
+                if (type === 'init') return send2Parent(message)
+                if (type === 'click') return actionSwitch([...tabList.children], message)
+            }
+        }
+    }
+
+}
+
+const css = csjs`
+.ui-tab {}
+.tab {
+    color: #000000;
+    background-color: #d9d9d9;
+    padding: 15px;
+    border: none;
+    border-top-left-radius: 8px;
+    border-top-right-radius: 8px;
+    margin-right: 4px;
+    /* outline: #d9d9d9 dotted 1px; */
+    cursor: pointer;
+    transition: background-color 0.3s ease-in-out;
+}
+.tab[class*="current"] {
+    background-color: #fff;
+}
+`
+}).call(this)}).call(this,"/node_modules/datdot-ui-tab/src/index.js")
+},{"bel":3,"csjs-inject":6,"datdot-ui-button":298,"path":313}],307:[function(require,module,exports){
+(function (__filename){(function (){
+const bel = require('bel')
+const message_maker = require('message-maker')
+const csjs = require('csjs-inject')
+const { format, getDate, getMonth, getYear, getDaysInMonth, isToday } = require('date-fns')
+
+var id = 0
+
+module.exports = datdot_ui_timeline_days
+
+function datdot_ui_timeline_days({from = 'Default', data = null, style}, parent_protocol) {
+
+// -----------------------------------
+  const myaddress = `${__filename}-${id++}`
+  const inbox = {}
+  const outbox = {}
+  const recipients = {}
+  const names = {}
+  const message_id = to => (outbox[to] = 1 + (outbox[to]||0))
+
+  const {notify, address} = parent_protocol(myaddress, listen)
+  names[address] = recipients['parent'] = { name: 'parent', notify, address, make: message_maker(myaddress) }
+  notify(recipients['parent'].make({ to: address, type: 'ready', refs: {} }))
+
+  function make_protocol (name) {
+      return function protocol (address, notify) {
+          console.log('PROTOCOL INIT', { name, address })
+          names[address] = recipients[name] = { name, address, notify, make: message_maker(myaddress) }
+          return { notify: listen, address: myaddress }
+      }
+  }
+
+  function listen (msg) {
+      const { head, refs, type, data, meta } = msg // receive msg
+      inbox[head.join('/')] = msg                  // store msg
+      const [from] = head
+      console.log('TIMELINE DAYS', { type, from, name: names[from].name, msg, data })
+      // handlers
+
+  }
+// -----------------------------------
+
+  const { make } = recipients['parent']
+  const date = new Date()
+  const today = getDate(date)
+
+  if ( data === null ) {
+      // if no data
+      var count = getMonth(date) // initial month
+      var month = format(date, 'MMMM') // get capitalization month
+      var year = getYear(date) // initial year
+      var days = getDaysInMonth(date) // initial days
+  } else {
+      // if data is loaded
+      var { from, count, month, year, days } = data
+  }
+
+  const is_today = (d) => isToday(new Date(year, count, d)) 
+  const el = bel`<section role="timeline-days" class=${style}></section>`
+
+  for (let d = 1; d <= days; d++ ) {
+      let date = format(new Date(year, count, d), 'd MMMM  yyyy, EEEE')
+      let setDate = format(new Date(year, count, d), 'yyyy-M-d')
+      
+      if (d < today && count <= new Date().getMonth() && year <= new Date().getFullYear() ) {
+          var day = bel`<div role="button" class="${css['timeline-day']} ${css['disabled-date']}" tabindex="-1" aria-today=${is_today(d)} aria-label="${date}" data-date="${setDate}">${d}</div>`
+      } else if ( count < new Date().getMonth() && year <= new Date().getFullYear() ) {
+          var day = bel`<div role="button" class="${css['timeline-day']} ${css['disabled-date']}" tabindex="-1" aria-today=${is_today(d)} aria-label="${date}" data-date="${setDate}">${d}</div>`
+      } else if ( year < new Date().getFullYear()) {
+          var day = bel`<div role="button" class="${css['timeline-day']} ${css['disabled-date']}" tabindex="-1" aria-today=${is_today(d)} aria-label="${date}" data-date="${setDate}">${d}</div>`
+      }
+        else {
+          var day = bel`<div role="button" class="${css['timeline-day']} ${is_today(d) ? `${css.today} ${css['date-selected']}` : ''}" tabindex="-1" aria-today=${is_today(d)} aria-label="${date}" aria-selected="${is_today(d)}" data-date="${setDate}" onclick=${(el) => onclick( el.target, setDate )}>${d}</div>`
+      }
+      el.append(day)
+  }
+
+  return el
+
+  function onclick(target, date) {
+    const children = [...el.children]
+    children.forEach( btn => {
+        btn.classList.remove(css['date-selected'])
+        btn.removeAttribute('aira-selected')
+    })
+
+    target.classList.add(css['date-selected'])
+    target.setAttribute('aria-selected', true)
+    return notify(make({ to: address, type: 'click', data: { body: date, count, month, year, days }}))
+  }
+}
+
+const css = csjs`
+.timeline-day {
+    text-align: center;
+    padding: 8px;
+    cursor: pointer;
+    transition: color 0.25s, background-color 0.25s ease-in-out;
+}
+.timeline-day:hover {
+    color: #fff;
+    background-color: #212121;
+}
+.timeline-day:focus, .timeline-day:active {
+    outline: dotted 1px #c9c9c9;
+}
+.today {
+    background-color: #f2f2f2;
+}
+.date-selected {
+    color: #fff;
+    background-color: #000;
+}
+.disabled-date {
+    color: #BBBBBB;
+    cursor: default;
+}
+.disabled-date:hover {
+    color: #BBBBBB;
+    background: none; 
+}
+`
+}).call(this)}).call(this,"/node_modules/datdot-ui-timeline-days/src/index.js")
+},{"bel":3,"csjs-inject":6,"date-fns":149,"message-maker":308}],308:[function(require,module,exports){
+module.exports = function message_maker (from) {
+  let msg_id = 0
+  return function make ({to, type, data = null, refs = {} }) {
+      const stack = (new Error().stack.split('\n').slice(2).filter(x => x.trim()))
+      return { head: [from, to, msg_id++], refs, type, data, meta: { stack }}
+  }
+}
+},{}],309:[function(require,module,exports){
 module.exports = attributeToProperty
 
 var transform = {
@@ -22278,7 +23473,7 @@ function attributeToProperty (h) {
   }
 }
 
-},{}],299:[function(require,module,exports){
+},{}],310:[function(require,module,exports){
 var attrToProp = require('hyperscript-attribute-to-property')
 
 var VAR = 0, TEXT = 1, OPEN = 2, CLOSE = 3, ATTR = 4
@@ -22575,7 +23770,7 @@ var closeRE = RegExp('^(' + [
 ].join('|') + ')(?:[\.#][a-zA-Z0-9\u007F-\uFFFF_:-]+)*$')
 function selfClosing (tag) { return closeRE.test(tag) }
 
-},{"hyperscript-attribute-to-property":298}],300:[function(require,module,exports){
+},{"hyperscript-attribute-to-property":309}],311:[function(require,module,exports){
 var inserted = {};
 
 module.exports = function (css, options) {
@@ -22599,7 +23794,7 @@ module.exports = function (css, options) {
     }
 };
 
-},{}],301:[function(require,module,exports){
+},{}],312:[function(require,module,exports){
 /**
  * Helpers.
  */
@@ -22763,7 +23958,540 @@ function plural(ms, msAbs, n, name) {
   return Math.round(ms / n) + ' ' + name + (isPlural ? 's' : '');
 }
 
-},{}],302:[function(require,module,exports){
+},{}],313:[function(require,module,exports){
+(function (process){(function (){
+// 'path' module extracted from Node.js v8.11.1 (only the posix part)
+// transplited with Babel
+
+// Copyright Joyent, Inc. and other Node contributors.
+//
+// Permission is hereby granted, free of charge, to any person obtaining a
+// copy of this software and associated documentation files (the
+// "Software"), to deal in the Software without restriction, including
+// without limitation the rights to use, copy, modify, merge, publish,
+// distribute, sublicense, and/or sell copies of the Software, and to permit
+// persons to whom the Software is furnished to do so, subject to the
+// following conditions:
+//
+// The above copyright notice and this permission notice shall be included
+// in all copies or substantial portions of the Software.
+//
+// THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS
+// OR IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF
+// MERCHANTABILITY, FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN
+// NO EVENT SHALL THE AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM,
+// DAMAGES OR OTHER LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR
+// OTHERWISE, ARISING FROM, OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE
+// USE OR OTHER DEALINGS IN THE SOFTWARE.
+
+'use strict';
+
+function assertPath(path) {
+  if (typeof path !== 'string') {
+    throw new TypeError('Path must be a string. Received ' + JSON.stringify(path));
+  }
+}
+
+// Resolves . and .. elements in a path with directory names
+function normalizeStringPosix(path, allowAboveRoot) {
+  var res = '';
+  var lastSegmentLength = 0;
+  var lastSlash = -1;
+  var dots = 0;
+  var code;
+  for (var i = 0; i <= path.length; ++i) {
+    if (i < path.length)
+      code = path.charCodeAt(i);
+    else if (code === 47 /*/*/)
+      break;
+    else
+      code = 47 /*/*/;
+    if (code === 47 /*/*/) {
+      if (lastSlash === i - 1 || dots === 1) {
+        // NOOP
+      } else if (lastSlash !== i - 1 && dots === 2) {
+        if (res.length < 2 || lastSegmentLength !== 2 || res.charCodeAt(res.length - 1) !== 46 /*.*/ || res.charCodeAt(res.length - 2) !== 46 /*.*/) {
+          if (res.length > 2) {
+            var lastSlashIndex = res.lastIndexOf('/');
+            if (lastSlashIndex !== res.length - 1) {
+              if (lastSlashIndex === -1) {
+                res = '';
+                lastSegmentLength = 0;
+              } else {
+                res = res.slice(0, lastSlashIndex);
+                lastSegmentLength = res.length - 1 - res.lastIndexOf('/');
+              }
+              lastSlash = i;
+              dots = 0;
+              continue;
+            }
+          } else if (res.length === 2 || res.length === 1) {
+            res = '';
+            lastSegmentLength = 0;
+            lastSlash = i;
+            dots = 0;
+            continue;
+          }
+        }
+        if (allowAboveRoot) {
+          if (res.length > 0)
+            res += '/..';
+          else
+            res = '..';
+          lastSegmentLength = 2;
+        }
+      } else {
+        if (res.length > 0)
+          res += '/' + path.slice(lastSlash + 1, i);
+        else
+          res = path.slice(lastSlash + 1, i);
+        lastSegmentLength = i - lastSlash - 1;
+      }
+      lastSlash = i;
+      dots = 0;
+    } else if (code === 46 /*.*/ && dots !== -1) {
+      ++dots;
+    } else {
+      dots = -1;
+    }
+  }
+  return res;
+}
+
+function _format(sep, pathObject) {
+  var dir = pathObject.dir || pathObject.root;
+  var base = pathObject.base || (pathObject.name || '') + (pathObject.ext || '');
+  if (!dir) {
+    return base;
+  }
+  if (dir === pathObject.root) {
+    return dir + base;
+  }
+  return dir + sep + base;
+}
+
+var posix = {
+  // path.resolve([from ...], to)
+  resolve: function resolve() {
+    var resolvedPath = '';
+    var resolvedAbsolute = false;
+    var cwd;
+
+    for (var i = arguments.length - 1; i >= -1 && !resolvedAbsolute; i--) {
+      var path;
+      if (i >= 0)
+        path = arguments[i];
+      else {
+        if (cwd === undefined)
+          cwd = process.cwd();
+        path = cwd;
+      }
+
+      assertPath(path);
+
+      // Skip empty entries
+      if (path.length === 0) {
+        continue;
+      }
+
+      resolvedPath = path + '/' + resolvedPath;
+      resolvedAbsolute = path.charCodeAt(0) === 47 /*/*/;
+    }
+
+    // At this point the path should be resolved to a full absolute path, but
+    // handle relative paths to be safe (might happen when process.cwd() fails)
+
+    // Normalize the path
+    resolvedPath = normalizeStringPosix(resolvedPath, !resolvedAbsolute);
+
+    if (resolvedAbsolute) {
+      if (resolvedPath.length > 0)
+        return '/' + resolvedPath;
+      else
+        return '/';
+    } else if (resolvedPath.length > 0) {
+      return resolvedPath;
+    } else {
+      return '.';
+    }
+  },
+
+  normalize: function normalize(path) {
+    assertPath(path);
+
+    if (path.length === 0) return '.';
+
+    var isAbsolute = path.charCodeAt(0) === 47 /*/*/;
+    var trailingSeparator = path.charCodeAt(path.length - 1) === 47 /*/*/;
+
+    // Normalize the path
+    path = normalizeStringPosix(path, !isAbsolute);
+
+    if (path.length === 0 && !isAbsolute) path = '.';
+    if (path.length > 0 && trailingSeparator) path += '/';
+
+    if (isAbsolute) return '/' + path;
+    return path;
+  },
+
+  isAbsolute: function isAbsolute(path) {
+    assertPath(path);
+    return path.length > 0 && path.charCodeAt(0) === 47 /*/*/;
+  },
+
+  join: function join() {
+    if (arguments.length === 0)
+      return '.';
+    var joined;
+    for (var i = 0; i < arguments.length; ++i) {
+      var arg = arguments[i];
+      assertPath(arg);
+      if (arg.length > 0) {
+        if (joined === undefined)
+          joined = arg;
+        else
+          joined += '/' + arg;
+      }
+    }
+    if (joined === undefined)
+      return '.';
+    return posix.normalize(joined);
+  },
+
+  relative: function relative(from, to) {
+    assertPath(from);
+    assertPath(to);
+
+    if (from === to) return '';
+
+    from = posix.resolve(from);
+    to = posix.resolve(to);
+
+    if (from === to) return '';
+
+    // Trim any leading backslashes
+    var fromStart = 1;
+    for (; fromStart < from.length; ++fromStart) {
+      if (from.charCodeAt(fromStart) !== 47 /*/*/)
+        break;
+    }
+    var fromEnd = from.length;
+    var fromLen = fromEnd - fromStart;
+
+    // Trim any leading backslashes
+    var toStart = 1;
+    for (; toStart < to.length; ++toStart) {
+      if (to.charCodeAt(toStart) !== 47 /*/*/)
+        break;
+    }
+    var toEnd = to.length;
+    var toLen = toEnd - toStart;
+
+    // Compare paths to find the longest common path from root
+    var length = fromLen < toLen ? fromLen : toLen;
+    var lastCommonSep = -1;
+    var i = 0;
+    for (; i <= length; ++i) {
+      if (i === length) {
+        if (toLen > length) {
+          if (to.charCodeAt(toStart + i) === 47 /*/*/) {
+            // We get here if `from` is the exact base path for `to`.
+            // For example: from='/foo/bar'; to='/foo/bar/baz'
+            return to.slice(toStart + i + 1);
+          } else if (i === 0) {
+            // We get here if `from` is the root
+            // For example: from='/'; to='/foo'
+            return to.slice(toStart + i);
+          }
+        } else if (fromLen > length) {
+          if (from.charCodeAt(fromStart + i) === 47 /*/*/) {
+            // We get here if `to` is the exact base path for `from`.
+            // For example: from='/foo/bar/baz'; to='/foo/bar'
+            lastCommonSep = i;
+          } else if (i === 0) {
+            // We get here if `to` is the root.
+            // For example: from='/foo'; to='/'
+            lastCommonSep = 0;
+          }
+        }
+        break;
+      }
+      var fromCode = from.charCodeAt(fromStart + i);
+      var toCode = to.charCodeAt(toStart + i);
+      if (fromCode !== toCode)
+        break;
+      else if (fromCode === 47 /*/*/)
+        lastCommonSep = i;
+    }
+
+    var out = '';
+    // Generate the relative path based on the path difference between `to`
+    // and `from`
+    for (i = fromStart + lastCommonSep + 1; i <= fromEnd; ++i) {
+      if (i === fromEnd || from.charCodeAt(i) === 47 /*/*/) {
+        if (out.length === 0)
+          out += '..';
+        else
+          out += '/..';
+      }
+    }
+
+    // Lastly, append the rest of the destination (`to`) path that comes after
+    // the common path parts
+    if (out.length > 0)
+      return out + to.slice(toStart + lastCommonSep);
+    else {
+      toStart += lastCommonSep;
+      if (to.charCodeAt(toStart) === 47 /*/*/)
+        ++toStart;
+      return to.slice(toStart);
+    }
+  },
+
+  _makeLong: function _makeLong(path) {
+    return path;
+  },
+
+  dirname: function dirname(path) {
+    assertPath(path);
+    if (path.length === 0) return '.';
+    var code = path.charCodeAt(0);
+    var hasRoot = code === 47 /*/*/;
+    var end = -1;
+    var matchedSlash = true;
+    for (var i = path.length - 1; i >= 1; --i) {
+      code = path.charCodeAt(i);
+      if (code === 47 /*/*/) {
+          if (!matchedSlash) {
+            end = i;
+            break;
+          }
+        } else {
+        // We saw the first non-path separator
+        matchedSlash = false;
+      }
+    }
+
+    if (end === -1) return hasRoot ? '/' : '.';
+    if (hasRoot && end === 1) return '//';
+    return path.slice(0, end);
+  },
+
+  basename: function basename(path, ext) {
+    if (ext !== undefined && typeof ext !== 'string') throw new TypeError('"ext" argument must be a string');
+    assertPath(path);
+
+    var start = 0;
+    var end = -1;
+    var matchedSlash = true;
+    var i;
+
+    if (ext !== undefined && ext.length > 0 && ext.length <= path.length) {
+      if (ext.length === path.length && ext === path) return '';
+      var extIdx = ext.length - 1;
+      var firstNonSlashEnd = -1;
+      for (i = path.length - 1; i >= 0; --i) {
+        var code = path.charCodeAt(i);
+        if (code === 47 /*/*/) {
+            // If we reached a path separator that was not part of a set of path
+            // separators at the end of the string, stop now
+            if (!matchedSlash) {
+              start = i + 1;
+              break;
+            }
+          } else {
+          if (firstNonSlashEnd === -1) {
+            // We saw the first non-path separator, remember this index in case
+            // we need it if the extension ends up not matching
+            matchedSlash = false;
+            firstNonSlashEnd = i + 1;
+          }
+          if (extIdx >= 0) {
+            // Try to match the explicit extension
+            if (code === ext.charCodeAt(extIdx)) {
+              if (--extIdx === -1) {
+                // We matched the extension, so mark this as the end of our path
+                // component
+                end = i;
+              }
+            } else {
+              // Extension does not match, so our result is the entire path
+              // component
+              extIdx = -1;
+              end = firstNonSlashEnd;
+            }
+          }
+        }
+      }
+
+      if (start === end) end = firstNonSlashEnd;else if (end === -1) end = path.length;
+      return path.slice(start, end);
+    } else {
+      for (i = path.length - 1; i >= 0; --i) {
+        if (path.charCodeAt(i) === 47 /*/*/) {
+            // If we reached a path separator that was not part of a set of path
+            // separators at the end of the string, stop now
+            if (!matchedSlash) {
+              start = i + 1;
+              break;
+            }
+          } else if (end === -1) {
+          // We saw the first non-path separator, mark this as the end of our
+          // path component
+          matchedSlash = false;
+          end = i + 1;
+        }
+      }
+
+      if (end === -1) return '';
+      return path.slice(start, end);
+    }
+  },
+
+  extname: function extname(path) {
+    assertPath(path);
+    var startDot = -1;
+    var startPart = 0;
+    var end = -1;
+    var matchedSlash = true;
+    // Track the state of characters (if any) we see before our first dot and
+    // after any path separator we find
+    var preDotState = 0;
+    for (var i = path.length - 1; i >= 0; --i) {
+      var code = path.charCodeAt(i);
+      if (code === 47 /*/*/) {
+          // If we reached a path separator that was not part of a set of path
+          // separators at the end of the string, stop now
+          if (!matchedSlash) {
+            startPart = i + 1;
+            break;
+          }
+          continue;
+        }
+      if (end === -1) {
+        // We saw the first non-path separator, mark this as the end of our
+        // extension
+        matchedSlash = false;
+        end = i + 1;
+      }
+      if (code === 46 /*.*/) {
+          // If this is our first dot, mark it as the start of our extension
+          if (startDot === -1)
+            startDot = i;
+          else if (preDotState !== 1)
+            preDotState = 1;
+      } else if (startDot !== -1) {
+        // We saw a non-dot and non-path separator before our dot, so we should
+        // have a good chance at having a non-empty extension
+        preDotState = -1;
+      }
+    }
+
+    if (startDot === -1 || end === -1 ||
+        // We saw a non-dot character immediately before the dot
+        preDotState === 0 ||
+        // The (right-most) trimmed path component is exactly '..'
+        preDotState === 1 && startDot === end - 1 && startDot === startPart + 1) {
+      return '';
+    }
+    return path.slice(startDot, end);
+  },
+
+  format: function format(pathObject) {
+    if (pathObject === null || typeof pathObject !== 'object') {
+      throw new TypeError('The "pathObject" argument must be of type Object. Received type ' + typeof pathObject);
+    }
+    return _format('/', pathObject);
+  },
+
+  parse: function parse(path) {
+    assertPath(path);
+
+    var ret = { root: '', dir: '', base: '', ext: '', name: '' };
+    if (path.length === 0) return ret;
+    var code = path.charCodeAt(0);
+    var isAbsolute = code === 47 /*/*/;
+    var start;
+    if (isAbsolute) {
+      ret.root = '/';
+      start = 1;
+    } else {
+      start = 0;
+    }
+    var startDot = -1;
+    var startPart = 0;
+    var end = -1;
+    var matchedSlash = true;
+    var i = path.length - 1;
+
+    // Track the state of characters (if any) we see before our first dot and
+    // after any path separator we find
+    var preDotState = 0;
+
+    // Get non-dir info
+    for (; i >= start; --i) {
+      code = path.charCodeAt(i);
+      if (code === 47 /*/*/) {
+          // If we reached a path separator that was not part of a set of path
+          // separators at the end of the string, stop now
+          if (!matchedSlash) {
+            startPart = i + 1;
+            break;
+          }
+          continue;
+        }
+      if (end === -1) {
+        // We saw the first non-path separator, mark this as the end of our
+        // extension
+        matchedSlash = false;
+        end = i + 1;
+      }
+      if (code === 46 /*.*/) {
+          // If this is our first dot, mark it as the start of our extension
+          if (startDot === -1) startDot = i;else if (preDotState !== 1) preDotState = 1;
+        } else if (startDot !== -1) {
+        // We saw a non-dot and non-path separator before our dot, so we should
+        // have a good chance at having a non-empty extension
+        preDotState = -1;
+      }
+    }
+
+    if (startDot === -1 || end === -1 ||
+    // We saw a non-dot character immediately before the dot
+    preDotState === 0 ||
+    // The (right-most) trimmed path component is exactly '..'
+    preDotState === 1 && startDot === end - 1 && startDot === startPart + 1) {
+      if (end !== -1) {
+        if (startPart === 0 && isAbsolute) ret.base = ret.name = path.slice(1, end);else ret.base = ret.name = path.slice(startPart, end);
+      }
+    } else {
+      if (startPart === 0 && isAbsolute) {
+        ret.name = path.slice(1, startDot);
+        ret.base = path.slice(1, end);
+      } else {
+        ret.name = path.slice(startPart, startDot);
+        ret.base = path.slice(startPart, end);
+      }
+      ret.ext = path.slice(startDot, end);
+    }
+
+    if (startPart > 0) ret.dir = path.slice(0, startPart - 1);else if (isAbsolute) ret.dir = '/';
+
+    return ret;
+  },
+
+  sep: '/',
+  delimiter: ':',
+  win32: null,
+  posix: null
+};
+
+posix.posix = posix;
+
+module.exports = posix;
+
+}).call(this)}).call(this,require('_process'))
+},{"_process":314}],314:[function(require,module,exports){
 // shim for using process in browser
 var process = module.exports = {};
 
@@ -22949,22 +24677,55 @@ process.chdir = function (dir) {
 };
 process.umask = function() { return 0; };
 
-},{}],303:[function(require,module,exports){
+},{}],315:[function(require,module,exports){
+(function (__filename){(function (){
 const debug = require('debug')
 const bel = require('bel')
 const csjs = require('csjs-inject')
 const { isBefore, getYear, getMonth, getDaysInMonth } = require('date-fns')
 // widgets
-const tab = require('datdot-ui-tab')
-const calendarMonth = require('datdot-ui-calendar-month')
 const timelineDays = require('datdot-ui-timeline-days')
-const datepicker = require('datdot-ui-datepicker')
+// const datepicker = require('datdot-ui-datepicker')
+const tab = require('datdot-ui-tab')
+const message_maker = require('message-maker')
+
+var id = 0
 
 module.exports = datdotui
 
-function datdotui (opts) {
-  const log = debug('datdot-ui')
-  const { jobs, plans } = opts
+function datdotui ({data}, parent_protocol) {
+// -----------------------------------
+  const myaddress = `${__filename}-${id++}`
+  const inbox = {}
+  const outbox = {}
+  const recipients = {}
+  const names = {}
+  const message_id = to => (outbox[to] = 1 + (outbox[to]||0))
+
+  const {notify, address} = parent_protocol(myaddress, listen)
+  names[address] = recipients['parent'] = { name: 'parent', notify, address, make: message_maker(myaddress) }
+  notify(recipients['parent'].make({ to: address, type: 'ready', refs: {} }))
+  
+  function make_protocol (name) {
+    return function protocol (address, notify) {
+      console.log('PROTOCOL INIT', { name, address })
+      names[address] = recipients[name] = { name, address, notify, make: message_maker(myaddress) }
+      return { notify: listen, address: myaddress }
+    }
+  }
+  
+  function listen (msg) {
+    const { head, refs, type, data, meta } = msg // receive msg
+    inbox[head.join('/')] = msg                  // store msg
+    const [from] = head
+    console.log('DATEPICKER', { type, from, name: names[from].name, msg, data })
+    // handlers
+  }
+// -----------------------------------
+
+  var counter = 0
+
+  const { jobs, plans } = data
   // set init date
   const date = new Date()
   let year = getYear(date)
@@ -22978,12 +24739,8 @@ function datdotui (opts) {
   let state = {}
   
   // SUB COMPONENTS
-  const timelinedays = timelineDays( {data: null, style: `${css['timeline-days']}` }, timelineDaysProtocol )
-  const tab1 = tab({from: jobs.title, arr: jobs.tab}, tabProtocol)
-  const tab2 = tab({from: plans.title, arr: plans.tab}, tabProtocol)
-  const calendarmonth1 = calendarMonth({from: jobs.title}, calendarMonthProtocol)
-  const calendarmonth2 = calendarMonth({from: plans.title}, calendarMonthProtocol)
-  const datepicker1 = datepicker({month1: [year, currentMonth, currentDays], month2: [year, nextMonth, nextDays] }, datepickerProtocol)
+  const timelinedays = timelineDays( {data: null, style: `${css['timeline-days']}` },  make_protocol(`timeline-${counter++}`) )
+  // const datepicker1 = datepicker({month1: [year, currentMonth, currentDays], month2: [year, nextMonth, nextDays] }, make_protocol(`datepicker-${counter++}`))
 
   const weekday = bel`<section class=${css['calendar-weekday']} role="weekday"></section>`
   const weekList= ['Monday', 'Tuesday', 'Wednesday', 'Thursday', 'Friday', 'Saturday', 'Sunday']
@@ -22994,35 +24751,12 @@ function datdotui (opts) {
   <div class=${css.wrap}>
     <section class=${css["ui-widgets"]}>
 
-      <!--- tab start -->
-      <div class=${css['ui-tab']}>
-        <h2 class=${css.title}>Tab</h2>
-        ${tab1}
-        ${tab2}
-      </div>
-      <!--- // tab end -->
-
-      <!--- ui-calendar-month start -->
-      <div class=${css['ui-calendar-header']}>
-        <h2 class=${css.title}>Calendar Header</h2>
-        <div class=${css["custom-header"]}>${calendarmonth1}</div>
-        <div class=${css["calendar-header-fullsize"]}>${calendarmonth2}</div>
-      </div>
-      <!--- // ui-calendar-month end -->
-
       <!--- ui-calendar-timeline-days start -->
       <div class=${css.days}>
         <h2 class=${css.title}>Timline days</h2>
         <div class=${css['calendar-timeline-days']}>${timelinedays}</div>
       </div>
       <!--- // ui-calendar-timeline-days end -->
-
-      <!--- ui-datepicker start -->
-      <div class=${css['ui-datepicker']}>
-        <h2 class=${css.title}>Date Picker</h2>
-        ${datepicker1}
-      </div>
-      <!--- // ui-datepicker end -->
 
     </section>
     <div class=${css.terminal}> </div>
@@ -23031,128 +24765,9 @@ function datdotui (opts) {
   const [, terminal] = element.children
  
   return element
-  /*********************************************
-    PROTOCOLS
-  *********************************************/
-  function datepickerProtocol (send) {
-    return function receiveFromDatepicker (message) {
-      const { from, type, body } = message
-      const log = debug(from)
-      const logger = log.extend('datdot-ui')
-      logger.log = domlog
-      logger(message)
-      // if (type === 'value/first') return log('<= received frist date', from, body)
-      // if (type === 'value/second') return log('<= received second date', from, body)
-      if (type === 'value') return log('<= received first and second date', body)
-      // if (type === 'next-month') return log('<= received', body)
-      // if (type === 'prev-month') return log('<= received', body)
-    }
-  } 
-
-  function tabProtocol (send) {
-    return function receiveFromTab (message) {
-      const { from, flow, type, body, active} = message
-      const log = debug(from)
-      const logger = log.extend('datdot-ui')
-      const tabChanges = log.extend(`${flow} changes`)
-      // logger.log must be put first then logger()
-      logger.log = domlog
-      logger(message)
-      if ( state.tabs == undefined ) state.tabs = new Array()
-      const foundFrom = state.tabs.some( obj => obj.from === from )
-      const foundData = state.tabs.some( obj => obj.from === from && obj.data.some( d => d.body === body ) )
-      const filterFrom = state.tabs.filter( obj => obj.from === from )
-
-      // check from if not existed then store new tab
-      if ( !foundFrom ) {
-        state.tabs.push( { from, data: [ {from, flow, type, body, active, logger} ] })
-        return tabChanges('state', state.tabs)
-      }
-
-      // check from and data existed then only change current tab status
-      if ( foundData ) {
-        filterFrom.map( o => o.data.map( d => d.active = d.body === body) )
-        return tabChanges('state', state.tabs)
-      }
-
-      // when data is not existed then add to data
-      filterFrom.map( o => o.data.push({from, flow, type, body, active, logger}) ) 
-      
-      // check from existed then store current tab status
-      if ( foundFrom ) {
-        filterFrom.map( o => o.data.map( d => d.active = d.body === body ))
-      }
-      
-      // check tab
-      tabChanges('state', state.tabs)
-    }
-  }
-
-  function calendarMonthProtocol (send) {
-    return function receiveFromCalendarMonth (message) {
-      const { from, flow, type, body, count, month, year, days } = message
-      const log = debug(from)
-      const logger = log.extend('datdot-ui')
-      const calenderTitleChanges = log.extend(`${flow} changes >`)
-      logger.log = domlog
-      logger(message)
-
-      // check calendar
-      state.calendar = Object.assign({}, message)
-      calenderTitleChanges('state', `${month} ${year}`, state.calendar)
-      
-      const typeTimeline = timelineDays( {from, data: state.calendar, style: `${css['timeline-days']}`}, timelineDaysProtocol )
-      // type: 'multiple picker', '
-      const timeline = document.querySelector(`.${css['calendar-timeline-days']}`)
-      timeline.innerHTML = ''
-      timeline.append(typeTimeline)
-    }
-  }
-
-  // function calendarDaysProtocol (send) {
-  //   return function receiveFromCalendarDays (message) {
-  //     const { from, flow, type, body, count, month, year, days} = message
-  //     const log = debug(from)
-  //     const logger = log.extend('calendar-days')
-  //     logger.log = domlog
-  //     logger(`${type} day ${body}`, message) 
-  //   }
-  // }
-
-  function timelineDaysProtocol (send) {
-    return function receiveFromTimlineDays (message) {
-      const { from, flow, type, body, count, month, year, days} = message
-      const log = debug(from)
-      const logger = log.extend('timeline-days')
-      logger.log = domlog
-      logger(`${type} day ${body}`, message) 
-    }
-  }
-
-  function domlog(...args) {
-    // console.log(args)
-    for (let obj of args) {
-      if (typeof obj === 'object' && obj.hasOwnProperty('month')) var {from, flow, type, body, month, year, days} = obj
-      if (typeof obj === 'object' && obj.hasOwnProperty('calendar-days')) var {from, flow, type, body, month, year, days} = obj
-      if (typeof obj === 'object' && obj.flow === 'ui-tab') var {from, flow, type, body} = obj
-      if (typeof obj === 'object' && obj.from === 'calendar month') log(args[3])
-      if (typeof obj === 'object' && obj.flow === 'ui-datepicker') var { from, flow, type, body} = obj
-      if (typeof obj === 'object' && obj.from === 'ui-datepicker') {
-        var { from, body} = obj
-        var { first, second } = body
-        var result = isBefore(new Date(...first), new Date(...second))
-        var start = result ? first.join('-') : second.join('-')
-        var end = result ? second.join('-') : first.join('-')
-      } 
-      
-    }
-    const el = bel`<div>${`${from} >`} ${flow}: ${body} ${start && `From ${start} to ${end}`} ${type} ${month && month} ${year && year}${days && `, ${days} days`}</div>`
-    // terminal.insertBefore(el, terminal.firstChild)
-    terminal.append(el)
-    terminal.scrollTop = terminal.scrollHeight
-  }
 
 }
+
 const css = csjs`
 body {
   margin: 0;
@@ -23256,868 +24871,5 @@ button:active, button:focus {
 
 }
 `
-},{"bel":3,"csjs-inject":6,"datdot-ui-calendar-month":305,"datdot-ui-datepicker":307,"datdot-ui-tab":308,"datdot-ui-timeline-days":309,"date-fns":149,"debug":296}],304:[function(require,module,exports){
-const bel = require('bel')
-const csjs = require('csjs-inject')
-const debug = require('debug')
-const { isToday, format, isPast, getDay, getDate, getMonth, getYear, getDaysInMonth } = require('date-fns')
-
-module.exports = calendarDays
-
-function calendarDays({ name = 'calendar', month, days, year, status = 'cleared'}, protocol) {
-    const widget = 'ui-calendar-days'
-    const log = debug(`${widget}/${name}`)
-    const sendToParent = protocol( receive )
-    sendToParent({ from: name, type: 'init' })
-    let nowMonth = month, nowDays = days, nowYear = year
-    const calendar = makeDays(nowDays)
-    let buttons = [...calendar.children]
-    let first, second
-    calendar.onmousemove = onmousemove
-    calendar.onclick = onclick
-    calendar.onmouseleave = onmouseleave
-    calendar.onmouseenter = onmouseenter
-
-    return calendar
-
-    function setStatus( nextStatus ) {
-        log('setStatus', JSON.stringify({ from: status, type: 'status', body: nextStatus}, 0, 2))
-        status = nextStatus
-        sendToParent({from: name, type: 'status', body: nextStatus} )
-    }
-    
-    function receive ( message ) { 
-        const {from, body, type} = message
-        console.log(type);
-        log(`${from} => ${type} => ${name}`)
-        if (type === 'clear') return actionClear()
-        if (type === 'selecting-second') return actionSelectingSecond(body)
-        if (type === 'not-selecting-second') return actionKeepFirst(body)
-        if (type === 'first-selected-by-startcal') return setStatus('first-selected-by-startcal')
-        if (type === 'first-selected-by-endcal') return setStatus('first-selected-by-endcal')
-        if (type === 'second-selected') return setStatus('second-selected-by-other')
-        if (type === 'color-from-start') return actionColorFromStart()
-        if (type === 'color-to-end') return actionColorToEnd()
-        if (type === 'change') return actionRenderNewCalendars(body)
-        if (type === 'color-range-from-start') return 
-        if (type === 'color-range-to-end') return 
-    }
-
-    function actionRenderNewCalendars(body) {
-        const { count, year, days } = body
-        nowMonth = count
-        nowYear = year
-        nowDays = days
-        const cal = makeDays(nowDays)
-        buttons = [...cal.children]
-
-        cal.onmousemove = onmousemove
-        cal.onclick = onclick
-        cal.onmouseleave = onmouseleave
-        cal.onmouseenter = onmouseenter
-        
-        return cal
-    }
-    
-    function actionSelectingSecond (body) {
-        colorRange(0, first)
-    }
-
-    function actionKeepFirst (body) {
-        onlyKeepFirst()
-    }
-
-    function actionColorToEnd () {
-        colorRange(first, days + 1)
-    }
-
-    function actionColorFromStart () {
-        colorRange(0, first)
-    }
-
-    function actionClear () {
-        clearSelf()
-    }
-
-    function clearAndNotify () {
-        clearSelf()
-        return sendToParent({from: name, type: 'not-selecting-second', body: ''})
-    }
-
-    function notifyOther () {
-        return sendToParent({from: name, type: 'selecting-second'})
-    }
-
-    function onlyKeepFirst () {
-        buttons.map( btn => {
-            const num = parseInt(btn.dataset.num)
-            if ( num != first ) {
-                btn.classList.remove(css['date-in-range'])
-                btn.classList.remove([css['date-selected']])
-            }
-        })
-    }
-
-    function onmouseenter (event) {
-        log('current status', status)
-        if (status === 'cleared') return
-        if (status === 'first-selected-by-self') return
-        if (status === 'first-selected-by-startcal') return notifyOther()
-        if (status === 'first-selected-by-endcal') return notifyOther()
-        if (status === 'second-selected-by-self') return
-        if (status === 'second-selected-by-other') return
-    }
-
-    function onmouseleave (event) {
-        log('current status', status)
-        if (status === 'cleared') return
-        if (status === 'first-selected-by-self') return onlyKeepFirst()
-        if (status === 'first-selected-by-startcal') return clearAndNotify()
-        if (status === 'first-selected-by-endcal') return clearAndNotify()
-        if (status === 'second-selected-by-self') return
-        if (status === 'second-selected-by-other') return
-    }
-
-    function onmousemove (event) {
-        const btn = event.target
-        const current = parseInt(btn.dataset.num)
-        if (!current || btn.classList.contains(css["disabled-day"])) return
-        if (status === 'cleared') return
-        if (status === 'first-selected-by-self') return markRange(btn, first, current)
-        if (status === 'first-selected-by-startcal') return markRange(btn, 0, current)
-        if (status === 'first-selected-by-endcal') return markRange(btn, first, current)
-        if (status === 'second-selected-by-self') return
-        if (status === 'second-selected-by-other') return
-        
-    }
-
-    function onclick (event) {
-        log('current status', status)
-        const btn = event.target
-        const current = parseInt(btn.dataset.num)
-        if (!current || btn.classList.contains(css["disabled-day"])) return
-        if (status === 'cleared') return selectFirst(btn, current)
-        if (status === 'first-selected-by-self') return selectSecond(btn, current)
-        if (status === 'first-selected-by-startcal') return selectSecond(btn, current)
-        if (status === 'first-selected-by-endcal') return selectSecond(btn, current)
-        if (status === 'second-selected-by-self') return selectFirst(btn, current)
-        if (status === 'second-selected-by-other') return selectFirst(btn, current)
-    }
-
-    function clearSelf () {
-        for (var i = 0; i < buttons.length; i++) {
-            buttons[i].classList.remove(css['date-in-range'])
-            buttons[i].classList.remove(css['date-selected'])
-        }
-        first = second = void 0
-    }
-
-    function selectSecond (btn, current) {
-        second = current
-        setStatus('second-selected-by-self')
-        sendToParent({from: name, type: 'second-selected'})
-        return sendToParent({from: name, type: 'value/second', body: [nowYear, nowMonth+1, second] })
-    }
-
-    function selectFirst (btn, current) {
-        clearSelf()
-        sendToParent({from: name, type: 'cleared'})
-        first = current
-        btn.classList.add(css['date-selected'])
-        setStatus('first-selected-by-self')
-        return sendToParent({from: name, type: 'value/first', body: [nowYear, nowMonth+1, first] })
-    }
-
-    function markRange (btn, A, B) {
-        if (A === B) return onlyKeepFirst()
-        if (A < B) colorRange(A, B)
-        else colorRange(B, A)
-    }
-
-    function colorRange (first, second) {
-        buttons.map( btn => {
-            let current = parseInt(btn.dataset.num)
-            if (!current || btn.classList.contains(css["disabled-day"])) return
-            if (current < first) {
-                btn.classList.remove(css['date-selected'])
-                btn.classList.remove(css['date-in-range'])
-            } 
-            if (current === first ) { 
-                btn.classList.add(css['date-selected'])
-            }
-            if (current > first) {
-                btn.classList.add(css['date-in-range'])
-            }
-            if (current === second) {
-                btn.classList.add(css['date-selected'])
-            }
-            if (current > second - 1) {
-                btn.classList.remove(css['date-in-range'])
-            }
-            if (current > second) {
-                btn.classList.remove(css['date-selected'])
-                btn.classList.remove(css['date-in-range'])
-            }
-        })
-    }
-
-    function makeDays (days) {
-        const el = bel`<section role="calendar-days" class=${css["calendar-days"]}></section>`
-        // make space for week
-        getSpaceInPrevMonth(el)
-
-        for (let i = 1; i < days + 1; i++) {
-            let formatDate = format(new Date(nowYear, nowMonth, i), 'd MMMM yyyy, EEEE')
-            let btn = bel`<button role="button" aria-selected="false" tabindex="-1" data-num="${i}" aria-label="${formatDate}" data-date="${nowYear}-${nowMonth+1}-${i}">${i}</button>`
-            if (isToday(new Date(nowYear, nowMonth, i)) ) {
-                btn.classList.add(css.today)
-                btn.setAttribute('aria-today', true)
-            } else { 
-                btn.classList.add(css.day)
-                if ( isPast(new Date(nowYear, nowMonth, i)) ) btn.classList.add(css["disabled-day"])
-                btn.setAttribute('aria-today', false)
-            }
-            el.append(btn)
-        }
-        
-        return el
-    }
-
-    function getSpaceInPrevMonth (el) {
-        // get days in previous month
-        let daysInPrevMonth = getDaysInMonth(new Date(nowYear, nowMonth-1))
-        // get day in prev month which means to add how many spans
-        let dayInPrevMonth = getDay(new Date(nowYear, nowMonth-1, daysInPrevMonth))
-        for (let s = dayInPrevMonth; s > 0; s--) {
-            let span = bel`<div class=${css['day-prev']} role="presentation" aria-label aria-disabled="false"></div>`
-            el.append((span))
-        }
-    }
-
-}
-
-const css = csjs`
-.calendar-days {
-    display: grid;
-    grid-template-rows: auto;
-    grid-template-columns: repeat(7, minmax(30px, auto));
-    justify-items: center;
-}
-button {
-    background: none;
-    border: none;
-    cursor: pointer;
-}
-.day {
-    display: grid;
-    align-items: center;
-    justify-content: center;
-    width: 30px;
-    height: 30px;
-    cursor: pointer;
-    transition: color 0.25s, background-color 0.25s ease-in-out;
-}
-.day:hover {
-    color: #fff;
-    background-color: #000;
-}
-.today {
-    background-color: #f2f2f2;
-}
-.date-selected, .date-selected:hover {
-    color: #fff;
-    background-color: #000;
-}
-.day-prev {}
-.disabled-day, .disabled-day:hover {
-    color: #BBBBBB;
-    background: none;
-    cursor: default;
-}
-.date-in-range {
-    color: #000;
-    background-color: #EAEAEA;
-}
-`
-},{"bel":3,"csjs-inject":6,"date-fns":149,"debug":296}],305:[function(require,module,exports){
-const debug = require('debug')
-const bel = require('bel')
-const csjs = require('csjs-inject')
-const { format, getMonth, getYear } = require('date-fns')
-const monthResult = require('month-result')
-const svg = require('svg')
-module.exports = datdot_ui_calendar_month
-
-function datdot_ui_calendar_month({from, getDate, type = 'click', status = 'init', view = 'default'}, protocol) {
-    const widget = 'ui-calendar-month'
-    const name = `${from}/${widget}`
-    const log = debug(name)
-    const logger = log.extend(`${widget} >`)
-    const sendToParent = protocol( receive )
-    const date = getDate || new Date()
-    let year = getYear( date )
-    let current = getMonth( date )
-    // get Capital month
-    let month = format( new Date(year, current), 'MMMM')
-
-    // elements
-    const title = bel`<h3 class=${css.title}>${month} ${year}</h3>`
-    const iconPrev = svg( { css: `${css.icon} ${css['icon-prev']}`, path: './src/assets/arrow-left.svg' } )
-    const iconNext = svg( { css: `${css.icon} ${css['icon-next']}`, path: './src/assets/arrow-right.svg' } )
-    const prev  = bel`<button role="button" aria-label="Previous month" class="${css.btn} ${css.prev}" onclick=${()=>trigger(prev)}>${iconPrev}</button>`
-    const next = bel`<button role="button" aria-label="Next month" class="${css.btn} ${css.next}" onclick=${()=>trigger(next)}>${iconNext}</button>`
-
-    if ( view === 'datepicker-multiple-days' || view === 'datepicker-range-days') {
-        var el = bel`<div class=${css["datepicker-header"]}>${title}</div>`
-    } else { // default status
-        var el = bel`<div class=${css["calendar-header"]}>${prev}${title}${next}</div>`
-    }
-    return el
-
-    function updateMonth(m, y) {
-        return title.innerHTML = `${m} ${y}`
-    }
-
-    function trigger(target) {
-        if (target.classList.contains(css.prev)) {
-            var body = 'prev month'
-            // decrement month
-            current -= 1
-        } else {
-            var body = 'next month'
-            // increment month
-            current += 1
-        }
-
-        let result = monthResult(current)
-        let { count, year, month, days} = result
-
-        updateMonth(month, year)
-        logger(body, count, type, `${month} ${year}, ${days} days`)
-       
-        // send message to parent component
-        message = { from, flow: widget, type, status, body, ...result}
-        logger(message.body, 'send', message)
-        return sendToParent(message)
-    } 
-
-    function receive(message) {
-        logger('msg from datepicker', message)
-    }
-}
-
-const css = csjs`
-.calendar-header {
-    display: grid;
-    grid-template-rows: auto;
-    grid-template-columns: minmax(25px, 30px) auto minmax(25px, 30px);
-    align-items: center;
-}
-.datepicker-header {
-    display: grid;
-    grid-template-rows: 30px;
-    grid-template-columns: auto;
-    align-items: center;
-    margin-bottom: 12px;
-}
-.datepicker-header > h3 {
-    margin: 0;
-}
-.btn {
-    background: none;
-    border: none;
-    border-radius: 50px;
-    width: 30px;
-    height: 30px;
-    padding: 0;
-    transition: background-color 0.3s ease-in-out;
-    cursor: pointer;
-}
-.btn:active, .btn:hover {
-    background-color: #C9C9C9;
-}
-.btn:active div > svg path, .btn:hover div > svg path {
-    
-}
-.prev {
-
-}
-.next {
-
-}
-.icon svg path {
-    transition: stroke 0.25s ease-in-out;
-}
-.icon-prev {
-
-}
-.icon-next {
-
-}
-.title {
-    text-align: center;
-}
-`
-},{"bel":3,"csjs-inject":6,"date-fns":149,"debug":296,"month-result":306,"svg":311}],306:[function(require,module,exports){
-const { format, setMonth, getMonth, getYear, getDaysInMonth } = require('date-fns')
-module.exports = monthResult
-function monthResult(number) {
-    let date = setMonth(new Date(), number)
-    let year = getYear(date)
-    let count = getMonth(date)
-    let month = format(date, 'MMMM')
-    let days = getDaysInMonth(date)
-    const result = {count, year, month, days}
-    return result
-}
-},{"date-fns":149}],307:[function(require,module,exports){
-const bel = require('bel')
-const csjs = require('csjs-inject')
-const debug = require('debug')
-const monthResult = require('month-result')
-const { isPast, isFuture } = require('date-fns')
-// widgets
-const calendarDays = require('../datdot-ui-calendar-days')
-const calendarMonth = require('../datdot-ui-calendar-month')
-const svg = require('svg')
-
-module.exports = datepicker
-
-function datepicker({name = 'datepicker', month1, month2, status = 'cleared'}, protocol) {
-    const widget = 'ui-datepicker'
-    const log = debug(`${widget}/${name}`)
-    log('ready')
-    const sendToParent = protocol( receive )
-    let name1 = 'calendar1'
-    let name2 = 'calendar2'
-    let count = month1[1]
-    const recipients = {}
-    let value = {}
-    let first, second
-    // elements
-    let cal1 = calendarDays({name: name1, month: month1[1], days: month1[2], year: month1[0], status }, calendarDaysProtocol(name1))
-    let cal2 = calendarDays({name: name2, month: month2[1], days: month2[2], year: month2[0], status }, calendarDaysProtocol(name2))
-    const weekList= ['Monday', 'Tuesday', 'Wednesday', 'Thursday', 'Friday', 'Saturday', 'Sunday']
-    const title1 = calendarMonth({from: name, getDate: new Date(month1[0], month1[1]), view: 'datepicker-range-days'}, calendarMonthProtocol)
-    const title2 = calendarMonth({from: name, getDate: new Date(month2[0], month2[1]), view: 'datepicker-range-days'}, calendarMonthProtocol)
-    const iconPrev = svg( { css: `${css.icon} ${css['icon-prev']}`, path: './src/assets/arrow-left.svg' } )
-    const iconNext = svg( { css: `${css.icon} ${css['icon-next']}`, path: './src/assets/arrow-right.svg' } )
-    const prevMonth  = bel`<button role="button" aria-label="Previous month" class="${css.btn} ${css.prev}" onclick=${triggerPreviousMonth}>${iconPrev}</button>`
-    const nextMonth = bel`<button role="button" aria-label="Next month" class="${css.btn} ${css.next}" onclick=${triggerNextMonth}>${iconNext}</button>`
-    const container = bel`<div class=${css['calendar-container']}></div>`
-
-    container.append( calendarView(title1, cal1), calendarView(title2, cal2) )
-
-    const element = bel`
-    <div class=${css.datepicker}>
-        <div class=${css["calendar-header"]}>${prevMonth}${nextMonth}</div>
-        ${container}
-    </div>`
-
-    return element
-
-    function calendarView (title, calendar) {
-        const cal = bel`<div class=${css.calendar}>${title}${makeWeekDays()}${calendar}</div>`
-        return cal
-    }
-
-    function calendarMonthProtocol (send) {
-        return function receiveMonth( message ) {
-            log(message)
-        }
-    }
-
-    function triggerPreviousMonth () {
-        count -= 2
-        const prevCal1 = monthResult(count)
-        const prevCal2 = monthResult(count + 1)
-        const message1 = { from: name, type: 'change', body: prevCal1}
-        const message2 = { from: name, type: 'change', body: prevCal2}
-        const ca1 = recipients[name1](message1)
-        const ca2 = recipients[name2](message2)
-        const month1Title = calendarMonth({from: name, getDate: new Date(prevCal1.year, prevCal1.count), view: 'datepicker-range-days'}, calendarMonthProtocol)
-        const month2Title = calendarMonth({from: name, getDate: new Date(prevCal2.year, prevCal2.count), view: 'datepicker-range-days'}, calendarMonthProtocol)
-        container.innerHTML = ''
-        container.append( calendarView(month1Title, ca1), calendarView(month2Title, ca2) )
-
-        const pastMonth = value.first ? isPast(new Date(prevCal1.year, prevCal1.count, prevCal1.days)) : undefined
-        if (pastMonth) return forwardMessage(name, {from: name, type: 'color-range-from-start'})
-    }
-    function triggerNextMonth () {
-        count += 2
-        const nextCal1 = monthResult(count)
-        const nextCal2 = monthResult(count + 1)
-        const message1 = { from: name, type: 'change', body: nextCal1}
-        const message2 = { from: name, type: 'change', body: nextCal2}
-        const ca1 = recipients[name1](message1)
-        const ca2 = recipients[name2](message2)
-        const month1Title = calendarMonth({from: name, getDate: new Date(nextCal1.year, nextCal1.count), view: 'datepicker-range-days'}, calendarMonthProtocol)
-        const month2Title = calendarMonth({from: name, getDate: new Date(nextCal2.year, nextCal2.count), view: 'datepicker-range-days'}, calendarMonthProtocol)
-        container.innerHTML = ''
-        container.append( calendarView(month1Title, ca1), calendarView(month2Title, ca2) )
-        
-        const nextMonth = value.first ? isFuture(new Date(nextCal1.year, nextCal1.count, nextCal1.days)) : undefined
-        if (nextMonth) return forwardMessage(name, {from: name, type: 'color-range-to-end'})
-    }
-
-    function makeWeekDays () {
-        const el = bel`<section class=${css['calendar-weekday']} role="weekday"></section>`
-        weekList.map( w => {
-            let div = bel`<div class=${css['calendar-week']} role="week">${w.slice(0 ,1)}</div>`
-            el.append(div)
-        })
-        return el
-    }
-
-    function calendarDaysProtocol (name) {
-        return send => {
-            recipients[name] = send
-            return receive
-        }
-    }
-
-    function receive (message) {
-        const {from, type, body} = message
-        log(`<= ${type} <= ${from}`) 
-        if (type === 'value/first') return notifyAndStoreFirst(from, body)
-        if (type === 'value/second') return notifyParent(from, body)
-        if (type === 'selecting-second') return notifyOtherCalenderSelectingLast(from)
-        if (type === 'cleared') return clearOther( from === name1 ? name2 : name1)
-        else return forwardMessage(from, message)
-    }
-
-    function filterOutRecipients (list) {
-        const receivers = Object.keys(recipients)
-                               .filter( name => !list.includes(name))
-                               .map(name => recipients[name])
-        return receivers
-    }
-
-    function forwardMessage (from, message) {
-        const list = [from]
-        const receivers = filterOutRecipients(list)
-        broadcast(receivers, message)
-    }
-
-    function clearOther (from) {
-        const send = recipients[from]
-        return send({ from: name, type: 'clear'})
-    }
-
-    function notifyParent (from, body) {
-        value.second = body
-        const message = {from: widget, type: 'value', body: value} 
-        log(`notify parent: ${widget} ${body}`)
-        sendToParent({from, flow: widget, type:'value/second', body})
-        return sendToParent(message)
-    }
-
-    function notifyOtherCalenderSelectingLast (from) {
-        if (from === name1) {
-            const send = recipients[name2]
-            const message  = {from: name, type: 'color-from-start'}
-            log(message)
-            return send( message )
-        }
-
-        if (from === name2) {
-            const send = recipients[name1]
-            const message = {from: name, type: 'color-to-end'}
-            log(message)
-            return send(message)
-        }
-    }
-    
-    function notifyAndStoreFirst (from, body) {
-        value.first = body
-        const list = [from]
-        const receivers = filterOutRcipients(list)
-        const type = from === name1 ? 'first-selected-by-startcal' : 'first-selected-by-endcal'
-        sendToParent({from, flow: widget, type: 'value/first', body})
-        return broadcast( receivers, {from: name, type}) 
-    }
-
-    function filterOutRcipients (list) {
-        const receivers = Object.keys(recipients)
-                                .filter( name => !list.includes(name))
-                                .map( name => recipients[name])
-        return receivers
-    }
-
-    function broadcast (receivers, message) {
-        const {from, type, body} = message
-        for ( let i = 0, len = receivers.length; i < len; i++) {
-            const send = receivers[i]
-            log('boradcast =>', `${body} => ${from}`)
-            send(message)
-        }
-    }
-
-}
-
-
-const css = csjs`
-.datepicker {
-    position: relative;
-    max-width: 510px;
-}
-.datepicker-body {
-    display: grid;
-    grid-template-rows: auto;
-    grid-template-columns: repeat(2, 210px);
-    grid-gap: 35px;
-}
-.btn {
-    background: none;
-    border: none;
-    border-radius: 50px;
-    width: 30px;
-    height: 30px;
-    padding: 0;
-    transition: background-color 0.3s ease-in-out;
-    cursor: pointer;
-}
-.btn:active, .btn:hover {
-    background-color: #C9C9C9;
-}
-.prev {}
-.next {}
-.icon svg path {
-    transition: stroke 0.25s ease-in-out;
-}
-.icon-prev {}
-.icon-next {}
-.calendar-header {
-    position: absolute;
-    z-index: 9;
-    display: flex;
-    justify-content: space-between;
-    width: 100%;
-}
-.calendar-container {
-    display: flex;
-}
-.calendar-weekday {
-    display: grid;
-    grid-template-rows: 30px;
-    grid-template-columns: repeat(7, minmax(30px, auto));
-    justify-items: center;
-    font-size: 12px;
-}
-.calendar-week {
-    
-}
-.calendar {
-    margin-left: 30px;
-}
-.title {
-    font-size: 18px;
-    text-align: center;
-}
-`
-},{"../datdot-ui-calendar-days":304,"../datdot-ui-calendar-month":305,"bel":3,"csjs-inject":6,"date-fns":149,"debug":296,"month-result":310,"svg":311}],308:[function(require,module,exports){
-const bel = require(('bel'))
-const csjs = require('csjs-inject')
-const debug = require('debug')
-
-module.exports = datdot_ui_tab
-
-function datdot_ui_tab({from, arr}, protocol) {
-    const widget = 'ui-tab'
-    const name = `${from}/${widget}`
-    const log = debug(name)
-    const sendToParent = protocol(function receive (message) { log(message) })
-    const element = bel`
-    <nav role="tablist" aria-tab="${from}" class=${css.tablist}>
-        ${arr.map( (tab, index) => {
-                if (index === 0) {
-                    return bel`<button role="tab" tabindex="0" aria-tab="${tab}" aria-selected="true" class="${css.btn} ${css.current}" onclick=${ (e) => onTrigger(e, tab) }>${tab}</button>`
-                } else {
-                    return bel`<button role="tab" tabindex="-1" aria-tab="${tab}" aria-selected="false" class=${css.btn} onclick=${ (e) => onTrigger(e, tab) }>${tab}</button>`
-                }
-            })
-        }
-    </nav>
-    `
-
-    return element
-
-    function onTrigger(e, tab) {
-        const logger = log.extend(`${from} > ${tab}`)
-        let message = { from, flow: widget, type: 'click', body: tab, active: false}
-        const el = e.target
-        const childrens = [...element.children]
-
-        if (el.classList.contains(css.current)) return
-            // add the code below if want to display log on console
-            // message.active = true
-
-        childrens.forEach( btn => {
-            btn.setAttribute('aria-selected', false)
-            btn.classList.remove(css.current)
-            message.active = false
-        })
-
-        if ( el.innerText === tab ) {
-            el.setAttribute('aria-selected', true)
-            el.classList.add(css.current)
-            message.active = true
-        }
-
-        logger('send', message)
-        return sendToParent(message)
-    }
-
-}
-
-const css = csjs`
-.tablist {
-    
-}
-.btn {
-    color: #000000;
-    background-color: #d9d9d9;
-    padding: 15px;
-    border: none;
-    border-top-left-radius: 8px;
-    border-top-right-radius: 8px;
-    margin-right: 4px;
-    /* outline: #d9d9d9 dotted 1px; */
-    cursor: pointer;
-    transition: background-color 0.3s ease-in-out;
-}
-.btn:hover {
-    background-color: #afafaf;
-}
-.current, .current:hover {
-    background-color: #fff;
-}
-`
-},{"bel":3,"csjs-inject":6,"debug":296}],309:[function(require,module,exports){
-const debug = require('debug')
-const bel = require('bel')
-const csjs = require('csjs-inject')
-const { format, getDate, getMonth, getYear, getDaysInMonth, isToday } = require('date-fns')
-
-module.exports = datdot_ui_timeline_days
-
-function datdot_ui_timeline_days({from = 'Default', data = null, style}, protocol) {
-    const widget = 'ui-timeline-days'
-    const name = `${from}/${widget}`
-    const log = debug(name)
-    const date = new Date()
-    const today = getDate(date)
-    const sendToParent = protocol(function receive (message) { log(message) })
-
-    if ( data === null ) {
-        // if no data
-        var count = getMonth(date) // initial month
-        var month = format(date, 'MMMM') // get capitalization month
-        var year = getYear(date) // initial year
-        var days = getDaysInMonth(date) // initial days
-    } else {
-        // if data is loaded
-        var { from, count, month, year, days } = data
-    }
-
-    const is_today = (d) => isToday(new Date(year, count, d)) 
-    const el = bel`<section role="timeline-days" class=${style}></section>`
-
-    for (let d = 1; d <= days; d++ ) {
-        let date = format(new Date(year, count, d), 'd MMMM  yyyy, EEEE')
-        let setDate = format(new Date(year, count, d), 'yyyy-M-d')
-        
-        if (d < today && count <= new Date().getMonth() && year <= new Date().getFullYear() ) {
-            var day = bel`<div role="button" class="${css['timeline-day']} ${css['disabled-date']}" tabindex="-1" aria-today=${is_today(d)} aria-label="${date}" data-date="${setDate}">${d}</div>`
-        } else if ( count < new Date().getMonth() && year <= new Date().getFullYear() ) {
-            var day = bel`<div role="button" class="${css['timeline-day']} ${css['disabled-date']}" tabindex="-1" aria-today=${is_today(d)} aria-label="${date}" data-date="${setDate}">${d}</div>`
-        } else if ( year < new Date().getFullYear()) {
-            var day = bel`<div role="button" class="${css['timeline-day']} ${css['disabled-date']}" tabindex="-1" aria-today=${is_today(d)} aria-label="${date}" data-date="${setDate}">${d}</div>`
-        }
-         else {
-            var day = bel`<div role="button" class="${css['timeline-day']} ${is_today(d) ? `${css.today} ${css['date-selected']}` : ''}" tabindex="-1" aria-today=${is_today(d)} aria-label="${date}" aria-selected="${is_today(d)}" data-date="${setDate}" onclick=${(el) => onclick( el.target, setDate )}>${d}</div>`
-        }
-        el.append(day)
-    }
-    
-    return el
-
-    function onclick(target, date) {
-        const message = { from, flow: widget, type: 'click', body: date, count, month, year, days }
-        const logger = log.extend(`day> ${message.body}`)
-
-        const children = [...el.children]
-        children.forEach( btn => {
-            btn.classList.remove(css['date-selected'])
-            btn.removeAttribute('aira-selected')
-        })
-
-        target.classList.add(css['date-selected'])
-        target.setAttribute('aria-selected', true)
-
-        logger('send', message)
-        return sendToParent(message)
-    }
-}
-
-const css = csjs`
-.timeline-day {
-    text-align: center;
-    padding: 8px;
-    cursor: pointer;
-    transition: color 0.25s, background-color 0.25s ease-in-out;
-}
-.timeline-day:hover {
-    color: #fff;
-    background-color: #212121;
-}
-.timeline-day:focus, .timeline-day:active {
-    outline: dotted 1px #c9c9c9;
-}
-.today {
-    background-color: #f2f2f2;
-}
-.date-selected {
-    color: #fff;
-    background-color: #000;
-}
-.disabled-date {
-    color: #BBBBBB;
-    cursor: default;
-}
-.disabled-date:hover {
-    color: #BBBBBB;
-    background: none; 
-}
-`
-},{"bel":3,"csjs-inject":6,"date-fns":149,"debug":296}],310:[function(require,module,exports){
-arguments[4][306][0].apply(exports,arguments)
-},{"date-fns":149,"dup":306}],311:[function(require,module,exports){
-module.exports = svg
-
-function svg(opts) {
-    var { css = null, path }  = opts
-    
-    const el = document.createElement('div')
-    
-    async function load(done) {
-        const res = await fetch(path)
-        const parse = document.createElement('div')
-
-        if (res.status == 200) {
-            let graphic = await res.text()
-            parse.innerHTML = graphic
-            return done(null, parse.children[0])
-        }
-        throw new Error(res.status)
-    }
-
-    load((err, svg) => {
-        if (err) console.error(err)
-        if (css) el.className = css
-        el.append(svg)
-    })
-    
-    return el
-}   
-},{}]},{},[1]);
+}).call(this)}).call(this,"/src/index.js")
+},{"bel":3,"csjs-inject":6,"datdot-ui-tab":306,"datdot-ui-timeline-days":307,"date-fns":149,"debug":296,"message-maker":308}]},{},[1]);

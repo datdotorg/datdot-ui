@@ -1,0 +1,215 @@
+[1mdiff --git a/demo/index.js b/demo/index.js[m
+[1mdeleted file mode 100644[m
+[1mindex fa9b904..0000000[m
+[1m--- a/demo/index.js[m
+[1m+++ /dev/null[m
+[36m@@ -1,14 +0,0 @@[m
+[31m-localStorage.debug = '*' // to get debug output[m
+[31m-const datdotui = require('..')[m
+[31m-const data = {[m
+[31m-  plans: {[m
+[31m-    title: 'PLANS',[m
+[31m-    tab: ['Data', 'Schedule', 'Location', 'Performance', 'Swarm'][m
+[31m-  },[m
+[31m-  jobs: {[m
+[31m-    title: 'JOBS',[m
+[31m-    tab: ['Calendar', 'Summary', 'Performance'][m
+[31m-  }[m
+[31m-}[m
+[31m-const element = datdotui(data)[m
+[31m-document.body.append(element)[m
+\ No newline at end of file[m
+[1mdiff --git a/src/datdot-ui.js b/src/datdot-ui.js[m
+[1mindex 2c78a2a..7856045 100644[m
+[1m--- a/src/datdot-ui.js[m
+[1m+++ b/src/datdot-ui.js[m
+[36m@@ -12,51 +12,14 @@[m [mmodule.exports = datdotui[m
+ [m
+ function datdotui (opts) {[m
+   const log = debug('datdot-ui')[m
+[31m-  const { jobs, plans } = opts[m
+[31m-  // set init date[m
+[31m-  const date = new Date()[m
+[31m-  let year = getYear(date)[m
+[31m-  // get current month[m
+[31m-  let currentMonth = getMonth(date)[m
+[31m-  let currentDays = getDaysInMonth(date)[m
+[31m-  // get next month[m
+[31m-  let nextMonth = currentMonth+1[m
+[31m-  let nextDays = getDaysInMonth(new Date(year, nextMonth))[m
+[31m-  // store data[m
+[31m-  let state = {}[m
+   [m
+   // SUB COMPONENTS[m
+   const timelinedays = timelineDays( {data: null, style: `${css['timeline-days']}` }, timelineDaysProtocol )[m
+[31m-  const tab1 = tab({from: jobs.title, arr: jobs.tab}, tabProtocol)[m
+[31m-  const tab2 = tab({from: plans.title, arr: plans.tab}, tabProtocol)[m
+[31m-  const calendarmonth1 = calendarMonth({from: jobs.title}, calendarMonthProtocol)[m
+[31m-  const calendarmonth2 = calendarMonth({from: plans.title}, calendarMonthProtocol)[m
+[31m-  const datepicker1 = datepicker({month1: [year, currentMonth, currentDays], month2: [year, nextMonth, nextDays] }, datepickerProtocol)[m
+[31m-[m
+[31m-  const weekday = bel`<section class=${css['calendar-weekday']} role="weekday"></section>`[m
+[31m-  const weekList= ['Monday', 'Tuesday', 'Wednesday', 'Thursday', 'Friday', 'Saturday', 'Sunday'][m
+[31m-  weekList.map( w => weekday.append( bel`<div class=${css['calendar-week']} role="week">${w.slice(0 ,1)}</div>`))[m
+[31m-[m
+ [m
+   const element = bel`[m
+   <div class=${css.wrap}>[m
+     <section class=${css["ui-widgets"]}>[m
+ [m
+[31m-      <!--- tab start -->[m
+[31m-      <div class=${css['ui-tab']}>[m
+[31m-        <h2 class=${css.title}>Tab</h2>[m
+[31m-        ${tab1}[m
+[31m-        ${tab2}[m
+[31m-      </div>[m
+[31m-      <!--- // tab end -->[m
+[31m-[m
+[31m-      <!--- ui-calendar-month start -->[m
+[31m-      <div class=${css['ui-calendar-header']}>[m
+[31m-        <h2 class=${css.title}>Calendar Header</h2>[m
+[31m-        <div class=${css["custom-header"]}>${calendarmonth1}</div>[m
+[31m-        <div class=${css["calendar-header-fullsize"]}>${calendarmonth2}</div>[m
+[31m-      </div>[m
+[31m-      <!--- // ui-calendar-month end -->[m
+ [m
+       <!--- ui-calendar-timeline-days start -->[m
+       <div class=${css.days}>[m
+[36m@@ -65,12 +28,6 @@[m [mfunction datdotui (opts) {[m
+       </div>[m
+       <!--- // ui-calendar-timeline-days end -->[m
+ [m
+[31m-      <!--- ui-datepicker start -->[m
+[31m-      <div class=${css['ui-datepicker']}>[m
+[31m-        <h2 class=${css.title}>Date Picker</h2>[m
+[31m-        ${datepicker1}[m
+[31m-      </div>[m
+[31m-      <!--- // ui-datepicker end -->[m
+ [m
+     </section>[m
+     <div class=${css.terminal}> </div>[m
+[36m@@ -82,124 +39,16 @@[m [mfunction datdotui (opts) {[m
+   /*********************************************[m
+     PROTOCOLS[m
+   *********************************************/[m
+[31m-  function datepickerProtocol (send) {[m
+[31m-    return function receiveFromDatepicker (message) {[m
+[31m-      const { from, type, body } = message[m
+[31m-      const log = debug(from)[m
+[31m-      const logger = log.extend('datdot-ui')[m
+[31m-      logger.log = domlog[m
+[31m-      logger(message)[m
+[31m-      // if (type === 'value/first') return log('<= received frist date', from, body)[m
+[31m-      // if (type === 'value/second') return log('<= received second date', from, body)[m
+[31m-      if (type === 'value') return log('<= received first and second date', body)[m
+[31m-      // if (type === 'next-month') return log('<= received', body)[m
+[31m-      // if (type === 'prev-month') return log('<= received', body)[m
+[31m-    }[m
+[31m-  } [m
+[31m-[m
+[31m-  function tabProtocol (send) {[m
+[31m-    return function receiveFromTab (message) {[m
+[31m-      const { from, flow, type, body, active} = message[m
+[31m-      const log = debug(from)[m
+[31m-      const logger = log.extend('datdot-ui')[m
+[31m-      const tabChanges = log.extend(`${flow} changes`)[m
+[31m-      // logger.log must be put first then logger()[m
+[31m-      logger.log = domlog[m
+[31m-      logger(message)[m
+[31m-      if ( state.tabs == undefined ) state.tabs = new Array()[m
+[31m-      const foundFrom = state.tabs.some( obj => obj.from === from )[m
+[31m-      const foundData = state.tabs.some( obj => obj.from === from && obj.data.some( d => d.body === body ) )[m
+[31m-      const filterFrom = state.tabs.filter( obj => obj.from === from )[m
+[31m-[m
+[31m-      // check from if not existed then store new tab[m
+[31m-      if ( !foundFrom ) {[m
+[31m-        state.tabs.push( { from, data: [ {from, flow, type, body, active, logger} ] })[m
+[31m-        return tabChanges('state', state.tabs)[m
+[31m-      }[m
+[31m-[m
+[31m-      // check from and data existed then only change current tab status[m
+[31m-      if ( foundData ) {[m
+[31m-        filterFrom.map( o => o.data.map( d => d.active = d.body === body) )[m
+[31m-        return tabChanges('state', state.tabs)[m
+[31m-      }[m
+[31m-[m
+[31m-      // when data is not existed then add to data[m
+[31m-      filterFrom.map( o => o.data.push({from, flow, type, body, active, logger}) ) [m
+[31m-      [m
+[31m-      // check from existed then store current tab status[m
+[31m-      if ( foundFrom ) {[m
+[31m-        filterFrom.map( o => o.data.map( d => d.active = d.body === body ))[m
+[31m-      }[m
+[31m-      [m
+[31m-      // check tab[m
+[31m-      tabChanges('state', state.tabs)[m
+[31m-    }[m
+[31m-  }[m
+[31m-[m
+[31m-  function calendarMonthProtocol (send) {[m
+[31m-    return function receiveFromCalendarMonth (message) {[m
+[31m-      const { from, flow, type, body, count, month, year, days } = message[m
+[31m-      const log = debug(from)[m
+[31m-      const logger = log.extend('datdot-ui')[m
+[31m-      const calenderTitleChanges = log.extend(`${flow} changes >`)[m
+[31m-      logger.log = domlog[m
+[31m-      logger(message)[m
+[31m-[m
+[31m-      // check calendar[m
+[31m-      state.calendar = Object.assign({}, message)[m
+[31m-      calenderTitleChanges('state', `${month} ${year}`, state.calendar)[m
+[31m-      [m
+[31m-      const typeTimeline = timelineDays( {from, data: state.calendar, style: `${css['timeline-days']}`}, timelineDaysProtocol )[m
+[31m-      // type: 'multiple picker', '[m
+[31m-      const timeline = document.querySelector(`.${css['calendar-timeline-days']}`)[m
+[31m-      timeline.innerHTML = ''[m
+[31m-      timeline.append(typeTimeline)[m
+[31m-    }[m
+[31m-  }[m
+[31m-[m
+[31m-  // function calendarDaysProtocol (send) {[m
+[31m-  //   return function receiveFromCalendarDays (message) {[m
+[31m-  //     const { from, flow, type, body, count, month, year, days} = message[m
+[31m-  //     const log = debug(from)[m
+[31m-  //     const logger = log.extend('calendar-days')[m
+[31m-  //     logger.log = domlog[m
+[31m-  //     logger(`${type} day ${body}`, message) [m
+[31m-  //   }[m
+[31m-  // }[m
+ [m
+   function timelineDaysProtocol (send) {[m
+     return function receiveFromTimlineDays (message) {[m
+       const { from, flow, type, body, count, month, year, days} = message[m
+       const log = debug(from)[m
+       const logger = log.extend('timeline-days')[m
+[31m-      logger.log = domlog[m
+       logger(`${type} day ${body}`, message) [m
+     }[m
+   }[m
+ [m
+[31m-  function domlog(...args) {[m
+[31m-    // console.log(args)[m
+[31m-    for (let obj of args) {[m
+[31m-      if (typeof obj === 'object' && obj.hasOwnProperty('month')) var {from, flow, type, body, month, year, days} = obj[m
+[31m-      if (typeof obj === 'object' && obj.hasOwnProperty('calendar-days')) var {from, flow, type, body, month, year, days} = obj[m
+[31m-      if (typeof obj === 'object' && obj.flow === 'ui-tab') var {from, flow, type, body} = obj[m
+[31m-      if (typeof obj === 'object' && obj.from === 'calendar month') log(args[3])[m
+[31m-      if (typeof obj === 'object' && obj.flow === 'ui-datepicker') var { from, flow, type, body} = obj[m
+[31m-      if (typeof obj === 'object' && obj.from === 'ui-datepicker') {[m
+[31m-        var { from, body} = obj[m
+[31m-        var { first, second } = body[m
+[31m-        var result = isBefore(new Date(...first), new Date(...second))[m
+[31m-        var start = result ? first.join('-') : second.join('-')[m
+[31m-        var end = result ? second.join('-') : first.join('-')[m
+[31m-      } [m
+[31m-      [m
+[31m-    }[m
+[31m-    const el = bel`<div>${`${from} >`} ${flow}: ${body} ${start && `From ${start} to ${end}`} ${type} ${month && month} ${year && year}${days && `, ${days} days`}</div>`[m
+[31m-    // terminal.insertBefore(el, terminal.firstChild)[m
+[31m-    terminal.append(el)[m
+[31m-    terminal.scrollTop = terminal.scrollHeight[m
+[31m-  }[m
+[31m-[m
+ }[m
+ const css = csjs`[m
+ body {[m
