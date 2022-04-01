@@ -1,7 +1,7 @@
 # datdot-ui
-example ui components
+example ui components are available in [datdot-ui organization](https://github.com/datdot-ui)
 
-https://playproject-io.github.io/datdot-ui/
+https://datdotorg.github.io/datdot-ui/
 
 ## usage
 `npm install datdot-ui`
