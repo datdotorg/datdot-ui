@@ -1,13 +1,8 @@
 # datdot-ui
-all ui components are available in [datdot-ui organization](https://github.com/datdot-ui)
 
+## datdot-ui organization 
+All ui components are available in [datdot-ui organization](https://github.com/datdot-ui)
+
+## Preview
+We are preparing a design system page -  to be able to try out and preview all the datdot-ui components. Preview will be available here
 https://datdotorg.github.io/datdot-ui/
-
-## usage
-`npm install datdot-ui`
-```js
-localStorage.debug = '*' // to get debug output
-const datdotui = require('datdot-ui')
-const element = datdotui({ buttons: 200 })
-document.body.append(element)
-```
