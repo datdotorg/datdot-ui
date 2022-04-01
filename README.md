@@ -1,5 +1,5 @@
 # datdot-ui
-example ui components are available in [datdot-ui organization](https://github.com/datdot-ui)
+all ui components are available in [datdot-ui organization](https://github.com/datdot-ui)
 
 https://datdotorg.github.io/datdot-ui/
 
